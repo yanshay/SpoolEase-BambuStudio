@@ -35,6 +35,7 @@
 #include "DeviceTab/wgtMsgPanel.h"
 #include "DeviceWeb/DeviceWebHost.hpp"
 #include "libslic3r/Log.hpp"
+#include "spoolease/SpoolEasePrintDialogUi.hpp"
 
 namespace Slic3r { namespace GUI {
 
@@ -296,10 +297,17 @@ static int s_get_mapped_nozzle_str_line_count(const wxString& text)
 
 void MaterialItem::doRender(wxDC& dc)
 {
-    const int status_border_space = FromDIP(1);
+#define GetSize() Slic3r::SpoolEase::print_dialog_bambu_size(*this, wxWindow::GetSize())
     wxSize frame_size = GetSize();
+    const wxColour spoolease_border_colour = m_selected ? wxColour(0x00, 0xAE, 0x42) : (m_warning ? wxColour(0xFF, 0x6F, 0x00) : (m_match ? (wxGetApp().dark_mode() ? wxColour(107, 107, 107) : wxColour(0xAC, 0xAC, 0xAC)) : wxColour(234, 31, 48)));
+    const int      spoolease_border_width  = (m_selected || m_warning) ? FromDIP(2) : FromDIP(1);
+    const wxPoint  spoolease_origin        = Slic3r::SpoolEase::begin_print_dialog_item_render(dc, *this, frame_size, spoolease_border_colour, spoolease_border_width, FromDIP(5));
+    wxCoord bambu_origin_x = 0;
+    wxCoord bambu_origin_y = 0;
+    dc.GetDeviceOrigin(&bambu_origin_x, &bambu_origin_y);
+    const int status_border_space = FromDIP(1);
     wxSize size(frame_size.x - status_border_space * 2, frame_size.y - status_border_space * 2);
-    dc.SetDeviceOrigin(status_border_space, status_border_space);
+    dc.SetDeviceOrigin(bambu_origin_x + status_border_space, bambu_origin_y + status_border_space);
     auto mcolor = m_material_coloul;
     auto acolor = m_ams_coloul;
     change_the_opacity(acolor);
@@ -483,10 +491,10 @@ void MaterialItem::doRender(wxDC& dc)
         dc.SetPen(wxPen(wxGetApp().dark_mode() ? wxColour(107, 107, 107) : wxColour(0xAC, 0xAC, 0xAC), FromDIP(1)));
     }
 
-    dc.SetDeviceOrigin(0, 0);
+    dc.SetDeviceOrigin(bambu_origin_x, bambu_origin_y);
     dc.SetBrush(*wxTRANSPARENT_BRUSH);
     dc.DrawRoundedRectangle(FromDIP(0), FromDIP(0), frame_size.x, frame_size.y, 5);
-    dc.SetDeviceOrigin(status_border_space, status_border_space);
+    dc.SetDeviceOrigin(bambu_origin_x + status_border_space, bambu_origin_y + status_border_space);
     //#endif
 
     auto wheel_left = (size.x / 2 - m_ams_wheel_mitem.GetBmpSize().x) / 2 + FromDIP(2) - FromDIP(LEFT_OFFSET);
@@ -572,6 +580,9 @@ void MaterialItem::doRender(wxDC& dc)
         int text_y = up + (size.y - up - text_size.y) / 2;
         dc.DrawText(wrapped_nozzle_str, text_x, text_y);
     }
+
+    Slic3r::SpoolEase::end_print_dialog_item_render(dc, *this, size, spoolease_origin, m_ams_name, ::Label::Body_12, dc.GetTextForeground(), spoolease_border_colour, spoolease_border_width, FromDIP(5));
+#undef GetSize
 }
 
 void MaterialItem::reset_valid_info() {
@@ -594,6 +605,8 @@ void MaterialItem::messure_size()
         SetMinSize(item_size);
         SetMaxSize(item_size);
     }
+
+    Slic3r::SpoolEase::adjust_print_dialog_item_size(*this);
 }
 
 AmsMapingPopup::AmsMapingPopup(wxWindow *parent, bool use_in_sync_dialog) :

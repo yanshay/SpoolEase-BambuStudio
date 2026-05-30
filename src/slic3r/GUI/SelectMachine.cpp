@@ -54,6 +54,7 @@
 #include "Notebook.hpp"
 #include "BitmapCache.hpp"
 #include "BindDialog.hpp"
+#include "spoolease/SpoolEasePrintDialogUi.hpp"
 
 // definitions
 #define S_RACK_NOZZLE_OFFSET_CALI_WARNING _L(\
@@ -4773,6 +4774,8 @@ void SelectMachineDialog::reset_and_sync_ams_list()
 
         if (!item) { continue; }
 
+        Slic3r::SpoolEase::set_print_dialog_required_weight_from_gcode(*item, m_plater && m_plater->get_partplate_list().get_curr_plate() ? m_plater->get_partplate_list().get_curr_plate()->get_slice_result() : nullptr, full_config.option<ConfigOptionFloats>("filament_density"), used_filament);
+
         if (used_filament < filament_color_render_info.size() && used_filament < filament_color_type_info.size()) {
             auto color_strs = Slic3r::split_string(filament_color_render_info[used_filament], ' ');
             if (color_strs.size() > 1) {
@@ -5311,6 +5314,8 @@ void SelectMachineDialog::set_default_from_sdcard()
         }
 
         if (!item) continue;
+
+        Slic3r::SpoolEase::set_print_dialog_required_weight_from_filaments(*item, m_required_data_plate_data_list[m_print_plate_idx]->slice_filaments_info, fo.id);
 
         if (fo.id < (int)filament_color_render_info2.size() && fo.id < (int)filament_color_type_info2.size()) {
             auto color_strs = Slic3r::split_string(filament_color_render_info2[fo.id], ' ');

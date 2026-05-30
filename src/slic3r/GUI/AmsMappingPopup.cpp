@@ -32,6 +32,7 @@
 
 #include "DeviceTab/wgtDeviceNozzleSelect.h"
 #include "DeviceTab/wgtMsgPanel.h"
+#include "spoolease/SpoolEasePrintDialogUi.hpp"
 
 namespace Slic3r { namespace GUI {
 #define MATERIAL_ITEM_SIZE wxSize(FromDIP(65), FromDIP(50))
@@ -280,7 +281,11 @@ static int s_get_mapped_nozzle_str_line_count(const wxString& text)
 
 void MaterialItem::doRender(wxDC& dc)
 {
+#define GetSize() Slic3r::SpoolEase::print_dialog_bambu_size(*this, wxWindow::GetSize())
     wxSize size = GetSize();
+    const wxColour spoolease_border_colour = m_selected ? wxColour(0x00, 0xAE, 0x42) : (m_warning ? wxColour(0xFF, 0x6F, 0x00) : (m_match ? (wxGetApp().dark_mode() ? wxColour(107, 107, 107) : wxColour(0xAC, 0xAC, 0xAC)) : wxColour(234, 31, 48)));
+    const int      spoolease_border_width  = (m_selected || m_warning) ? FromDIP(2) : FromDIP(1);
+    const wxPoint  spoolease_origin        = Slic3r::SpoolEase::begin_print_dialog_item_render(dc, *this, size, spoolease_border_colour, spoolease_border_width, FromDIP(5));
     auto mcolor = m_material_coloul;
     auto acolor = m_ams_coloul;
     change_the_opacity(acolor);
@@ -545,6 +550,9 @@ void MaterialItem::doRender(wxDC& dc)
         int text_y = up + (size.y - up - text_size.y) / 2;
         dc.DrawText(wrapped_nozzle_str, text_x, text_y);
     }
+
+    Slic3r::SpoolEase::end_print_dialog_item_render(dc, *this, size, spoolease_origin, m_ams_name, ::Label::Body_12, dc.GetTextForeground(), spoolease_border_colour, spoolease_border_width, FromDIP(5));
+#undef GetSize
 }
 
 void MaterialItem::reset_valid_info() {
@@ -564,6 +572,8 @@ void MaterialItem::messure_size()
         SetMinSize(wxSize(FromDIP(65), item_height));
         SetMaxSize(wxSize(FromDIP(65), item_height));
     }
+
+    Slic3r::SpoolEase::adjust_print_dialog_item_size(*this);
 }
 
 MaterialSyncItem::MaterialSyncItem(wxWindow *parent, wxColour mcolour, wxString mname, std::string filament_id) : MaterialItem(parent, mcolour, mname, filament_id)

@@ -1,6 +1,8 @@
 add_library(spoolease STATIC
     SpoolEaseConfig.cpp
     SpoolEaseConfig.hpp
+    SpoolEaseDeviceSlotUi.cpp
+    SpoolEaseDeviceSlotUi.hpp
 )
 
 target_include_directories(spoolease

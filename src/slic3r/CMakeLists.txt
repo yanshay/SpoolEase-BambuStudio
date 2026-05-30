@@ -638,6 +638,7 @@ set(SLIC3R_GUI_SOURCES
     Utils/FrameBuffer.hpp
 )
 
+add_subdirectory(../spoolease ${CMAKE_CURRENT_BINARY_DIR}/spoolease)
 add_subdirectory(GUI/DeviceCore)
 add_subdirectory(GUI/DeviceTab)
 add_subdirectory(GUI/fila_manager)
@@ -705,6 +706,7 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SLIC3R_GUI_SOURCES})
 encoding_check(libslic3r_gui)
 
 target_link_libraries(libslic3r_gui libslic3r cereal imgui imguizmo minilzo GLEW::GLEW OpenGL::GL hidapi ${wxWidgets_LIBRARIES} glfw libcurl OpenSSL::SSL OpenSSL::Crypto)
+target_link_libraries(libslic3r_gui spoolease)
 #target_link_libraries(libslic3r_gui libslic3r cereal imgui imguizmo minilzo GLEW::GLEW OpenGL::GL hidapi libcurl OpenSSL::SSL OpenSSL::Crypto ${wxWidgets_LIBRARIES} glfw)
 
 if (MSVC)

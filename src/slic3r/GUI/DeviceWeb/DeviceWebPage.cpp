@@ -4,6 +4,7 @@
 #include "libslic3r/Utils.hpp"
 #include "libslic3r_version.h"
 #include "DeviceWebPage.hpp"
+#include "spoolease/SpoolEaseConfig.hpp"
 
 #if defined(__WXOSX__)
 #include "slic3r/Utils/MacDarkMode.hpp"
@@ -72,6 +73,9 @@ void DeviceWebPage::LoadUrl()
     wxString url = wxString::Format("file://%s/web/device_page/dist/index.html?lang=%s", from_u8(resources_dir()), lang);
 #endif
 
+    std::string spool_ease_url = Slic3r::SpoolEase::filament_manager_url();
+    if (!spool_ease_url.empty())
+        url = wxString::FromUTF8(spool_ease_url);
     m_device_webview->load_url(url);
 }
 

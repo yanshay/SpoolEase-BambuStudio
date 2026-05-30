@@ -10,6 +10,7 @@
 #include "slic3r/GUI/DeviceCore/DevFilaSystem.h"
 #include "slic3r/GUI/DeviceCore/DevConfig.h"
 #include "slic3r/GUI/DeviceCore/DevManager.h"
+#include "spoolease/SpoolEaseDeviceSlotUi.hpp"
 #include "../DeviceCore/DevConfigUtil.h"
 
 #include <wx/simplebook.h>
@@ -1088,6 +1089,8 @@ void AMSLib::render(wxDC &dc)
     else{
         render_generic_text(dc);
     }
+
+    Slic3r::SpoolEase::draw_device_slot_overlay(dc, *this, m_obj ? m_obj->get_dev_id() : std::string(), m_ams_id, m_slot_id);
 }
 
 void AMSLib::render_lite_text(wxDC& dc)

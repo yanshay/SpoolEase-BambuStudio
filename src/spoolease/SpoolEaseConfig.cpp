@@ -51,19 +51,25 @@ std::string filament_manager_url()
                 return {};
             }
 
-            const nlohmann::json section = config.value("filament_manager", nlohmann::json::object());
+            const nlohmann::json section = config.value("console", nlohmann::json::object());
             if (!section.is_object()) {
-                show_config_warning_once("SpoolEase configuration is missing object 'filament_manager':\n" + path);
+                show_config_warning_once("SpoolEase configuration is missing object 'console':\n" + path);
                 return {};
             }
 
-            std::string url = section.value("url", std::string());
-            if (url.empty()) {
-                show_config_warning_once("SpoolEase configuration is missing 'filament_manager.url':\n" + path);
+            std::string address = section.value("address", std::string());
+            if (address.empty()) {
+                show_config_warning_once("SpoolEase configuration is missing 'console.address':\n" + path);
                 return {};
             }
 
-            return url;
+            std::string security_key = section.value("security_key", std::string());
+            if (security_key.empty()) {
+                show_config_warning_once("SpoolEase configuration is missing 'console.security_key':\n" + path);
+                return {};
+            }
+
+            return "http://" + address + "/app/inventory#sk=" + security_key;
         }
     } catch (const std::exception& e) {
         show_config_warning_once("Failed to read SpoolEase configuration file:\n" + path + "\n\n" + e.what());

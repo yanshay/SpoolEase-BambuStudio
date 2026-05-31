@@ -59,7 +59,7 @@ int top_extra(const wxWindow& item)
 
 int bottom_extra(const wxWindow& item)
 {
-    return item.FromDIP(48);
+    return item.FromDIP(44);
 }
 
 wxSize total_size_from_bambu(const wxWindow& item, const wxSize& bambu_size)
@@ -262,7 +262,7 @@ CapacityStatus draw_extra_content(wxDC& dc, const wxWindow& item, const wxSize& 
     const wxSize pill_text_size = dc.GetTextExtent(pill_text);
     const wxSize four_char_size = dc.GetTextExtent("0000");
     const int margin = item.FromDIP(5);
-    const int pill_h = item.FromDIP(20);
+    const int pill_h = item.FromDIP(16);
     const int pill_w = std::min(size.x - 2 * margin, std::max(four_char_size.x + item.FromDIP(12), pill_text_size.x + item.FromDIP(12)));
     const int pill_x = (size.x - pill_w) / 2;
     const int pill_y = bottom_y + item.FromDIP(4);
@@ -272,7 +272,7 @@ CapacityStatus draw_extra_content(wxDC& dc, const wxWindow& item, const wxSize& 
     dc.DrawRoundedRectangle(pill_x, pill_y, pill_w, pill_h, pill_h / 2);
 
     dc.SetTextForeground(wxColour(0, 0, 0));
-    draw_centered_text(dc, pill_text, pill_x, pill_y - item.FromDIP(1), pill_w, pill_h);
+    draw_centered_text(dc, pill_text, pill_x, pill_y, pill_w, pill_h);
 
     const int slot_y = pill_y + pill_h + item.FromDIP(2) - 1;
     dc.SetFont(font.IsOk() ? font : base_font(item, 12, wxFONTWEIGHT_NORMAL));

@@ -1425,6 +1425,8 @@ void MappingItem::render(wxDC &dc)
     }
     txt_size = dc.GetTextExtent(m_name);
     dc.DrawText(m_name, wxPoint((GetSize().x - txt_size.x) / 2, top));
+
+    Slic3r::SpoolEase::draw_mapping_popup_slot_weight(*this, dc, m_tray_data.ams_id, m_tray_data.slot_id, m_coloul, dc.GetFont(), txt_colour, m_checked);
 }
 
 void MappingItem::set_data(const wxString &tag_name, wxColour colour, wxString name, bool remain_dect, TrayData data, bool unmatch, std::optional<wxString> tooltip_opt)

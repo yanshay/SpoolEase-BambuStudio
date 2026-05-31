@@ -47,6 +47,7 @@
 #include "DeviceTab/wgtDeviceNozzleSelect.h"
 #include "DeviceTab/wgtMsgPanel.h"
 #include "libslic3r/Log.hpp"
+#include "spoolease/SpoolEasePrintDialogUi.hpp"
 
 namespace Slic3r::GUI {
 
@@ -92,6 +93,8 @@ void AmsMapingPopup::update(MachineObject* obj,
     BOOST_LOG_TRIVIAL(info) << "ams_mapping total count " << obj->GetFilaSystem()->GetAmsCount();
 
     if (!obj) { return; }
+
+    Slic3r::SpoolEase::set_mapping_popup_printer_serial(*this, obj->get_dev_id());
 
     // Default to an immediate show; the hotend-web reopen path re-arms the
     // deferred (anti-flicker) show below. Legacy wx machines always show now.

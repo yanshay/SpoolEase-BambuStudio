@@ -1,5 +1,7 @@
 #include "SpoolEaseDeviceSlotUi.hpp"
 
+#include "SpoolEaseInventory.hpp"
+
 #include <wx/brush.h>
 #include <wx/colour.h>
 #include <wx/dc.h>
@@ -31,7 +33,9 @@ void draw_centered_text(wxDC& dc, const wxString& text, int x, int y, int width,
 
 void draw_device_slot_overlay(wxDC& dc, wxWindow& slot, const std::string& printer_serial, const std::string& ams_id, const std::string& slot_id)
 {
-    (void) printer_serial;
+    const std::optional<SlotInventory> inventory = slot_inventory(printer_serial, ams_id, slot_id);
+    if (!inventory.has_value())
+        return;
 
     const wxSize size = slot.GetClientSize();
     if (size.x <= 0 || size.y <= 0)
@@ -62,11 +66,11 @@ void draw_device_slot_overlay(wxDC& dc, wxWindow& slot, const std::string& print
 
     dc.SetFont(pill_font);
     dc.SetTextForeground(wxColour(0, 0, 0));
-    draw_centered_text(dc, display_text(ams_id), pill_x, pill_y - dip(1), pill_width, pill_height);
+    draw_centered_text(dc, display_text(display_spool_id(inventory->spool_id)), pill_x, pill_y - dip(1), pill_width, pill_height);
 
     dc.SetFont(weight_font);
     dc.SetTextForeground(material_text_colour);
-    draw_centered_text(dc, display_text(slot_id), 0, pill_y + pill_height + dip(3) - 1, size.x, dip(14));
+    draw_centered_text(dc, display_text(display_weight(inventory->weight_net)), 0, pill_y + pill_height + dip(3) - 1, size.x, dip(14));
 }
 
 }} // namespace Slic3r::SpoolEase

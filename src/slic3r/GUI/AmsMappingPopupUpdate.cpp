@@ -37,6 +37,7 @@
 
 #include "DeviceTab/wgtDeviceNozzleSelect.h"
 #include "DeviceTab/wgtMsgPanel.h"
+#include "spoolease/SpoolEasePrintDialogUi.hpp"
 
 namespace Slic3r::GUI {
 
@@ -69,6 +70,8 @@ void AmsMapingPopup::update(MachineObject* obj,
     BOOST_LOG_TRIVIAL(info) << "ams_mapping total count " << obj->GetFilaSystem()->GetAmsCount();
 
     if (!obj) { return; }
+
+    Slic3r::SpoolEase::set_mapping_popup_printer_serial(*this, obj->get_dev_id());
 
     for (auto& ams_container : m_amsmapping_container_list) {
         ams_container->Destroy();

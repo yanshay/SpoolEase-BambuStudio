@@ -47,6 +47,7 @@
 #include "DeviceTab/wgtDeviceNozzleSelect.h"
 #include "DeviceTab/wgtMsgPanel.h"
 #include "libslic3r/Log.hpp"
+#include "spoolease/SpoolEasePrintDialogUi.hpp"
 
 namespace Slic3r::GUI {
 
@@ -116,6 +117,8 @@ void AmsMapingPopup::update(MachineObject* obj,
         update_hotend_web(obj, ams_mapping_result, print_type);
         return;
     }
+
+    Slic3r::SpoolEase::set_mapping_popup_printer_serial(*this, obj->get_dev_id());
 
     // Restore legacy layout in case a previous hotend-rack call hid the scrolled body.
     m_scrolled_window->Show(true);

@@ -32,7 +32,14 @@ struct ItemState
     bool                  cleanup_bound{false};
 };
 
+struct MappingPopupState
+{
+    std::string printer_serial;
+    bool        cleanup_bound{false};
+};
+
 std::unordered_map<const wxWindow*, ItemState> s_item_states;
+std::unordered_map<const wxWindow*, MappingPopupState> s_mapping_popup_states;
 
 bool is_active(const wxWindow& item)
 {
@@ -117,6 +124,20 @@ void draw_centered_text(wxDC& dc, const wxString& text, int x, int y, int width,
 wxString visible_text(const std::string& text)
 {
     return wxString::FromUTF8(text.empty() ? std::string("-") : text);
+}
+
+std::string mapping_popup_printer_serial_for(const wxWindow& item)
+{
+    const wxWindow* current = &item;
+    while (current) {
+        auto it = s_mapping_popup_states.find(current);
+        if (it != s_mapping_popup_states.end())
+            return it->second.printer_serial;
+
+        current = current->GetParent();
+    }
+
+    return std::string();
 }
 
 std::optional<SlotInventory> inventory_for_slot_label(const ItemState& state, const wxString& slot_label)
@@ -350,6 +371,65 @@ void set_print_dialog_required_weight(wxWindow& item, std::optional<float> requi
     }
     apply_item_size(item);
     item.Refresh();
+}
+
+void set_mapping_popup_printer_serial(wxWindow& popup, const std::string& printer_serial)
+{
+    start_inventory_polling();
+
+    MappingPopupState& state = s_mapping_popup_states[&popup];
+    state.printer_serial = printer_serial;
+    if (!state.cleanup_bound) {
+        popup.Bind(wxEVT_DESTROY, [](wxWindowDestroyEvent& event) {
+            if (auto* window = dynamic_cast<wxWindow*>(event.GetEventObject()))
+                s_mapping_popup_states.erase(window);
+            event.Skip();
+        });
+        state.cleanup_bound = true;
+    }
+}
+
+void draw_mapping_popup_slot_weight(const wxWindow& item, wxDC& dc, int ams_id, int slot_id, const wxColour& background_colour, const wxFont& font, const wxColour& text_colour, bool checked)
+{
+    const std::string printer_serial = mapping_popup_printer_serial_for(item);
+    if (printer_serial.empty())
+        return;
+
+    const std::optional<SlotInventory> inventory = slot_inventory(printer_serial, std::to_string(ams_id), std::to_string(slot_id));
+    if (!inventory.has_value())
+        return;
+
+    const bool is_external = ams_id == 254 || ams_id == 255;
+    const int side_margin = item.FromDIP(4);
+    const int top = is_external ? 0 : item.FromDIP(2);
+    const int height = is_external ? item.FromDIP(12) : item.FromDIP(20);
+    const wxSize size = item.GetSize();
+    const wxRect rect(side_margin, top, std::max(1, size.x - 2 * side_margin), std::max(1, height));
+
+    dc.SetPen(wxPen(background_colour, 1));
+    dc.SetBrush(wxBrush(background_colour));
+    dc.DrawRectangle(rect);
+
+    if (checked && !is_external) {
+        const int check_size = item.FromDIP(20);
+        const int check_left = size.x - check_size - side_margin;
+        const int check_right = check_left + check_size;
+        const int check_bottom = item.FromDIP(10) + check_size;
+        const int overlay_bottom = rect.y + rect.height;
+        if (overlay_bottom < check_bottom) {
+            wxPoint triangle[] = {
+                wxPoint(check_left + (overlay_bottom - item.FromDIP(10)), overlay_bottom),
+                wxPoint(check_right, overlay_bottom),
+                wxPoint(check_right, check_bottom)
+            };
+            dc.DrawPolygon(3, triangle);
+        }
+    }
+
+    if (font.IsOk())
+        dc.SetFont(font);
+    dc.SetTextForeground(text_colour);
+    draw_centered_text(dc, visible_text(display_weight(inventory->weight_net)), rect.x, rect.y, rect.width, rect.height);
 }
 
 }} // namespace Slic3r::SpoolEase

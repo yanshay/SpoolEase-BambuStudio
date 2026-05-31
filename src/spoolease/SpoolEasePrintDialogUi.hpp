@@ -20,6 +20,8 @@ void    adjust_print_dialog_item_size(wxWindow& item);
 wxPoint begin_print_dialog_item_render(wxDC& dc, const wxWindow& item, const wxSize& bambu_size, const wxColour& border_colour, int border_width, int corner_radius);
 void    end_print_dialog_item_render(wxDC& dc, const wxWindow& item, const wxSize& bambu_size, const wxPoint& original_origin, const wxString& slot_label, const wxFont& font, wxColour text_colour, const wxColour& border_colour, int border_width, int corner_radius);
 void    set_print_dialog_required_weight(wxWindow& item, std::optional<float> required_g, const std::string& printer_serial = std::string());
+void    set_mapping_popup_printer_serial(wxWindow& popup, const std::string& printer_serial);
+void    draw_mapping_popup_slot_weight(const wxWindow& item, wxDC& dc, int ams_id, int slot_id, const wxColour& background_colour, const wxFont& font, const wxColour& text_colour, bool checked);
 
 template<class Filaments>
 void set_print_dialog_required_weight_from_filaments(wxWindow& item, const Filaments& filaments, int filament_id, const std::string& printer_serial = std::string())

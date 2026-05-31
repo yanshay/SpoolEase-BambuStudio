@@ -1,5 +1,7 @@
 #include "SpoolEasePrintDialogUi.hpp"
 
+#include "SpoolEaseInventory.hpp"
+
 #include <wx/brush.h>
 #include <wx/colour.h>
 #include <wx/dc.h>
@@ -26,6 +28,7 @@ struct ItemState
 {
     std::optional<wxSize> bambu_size;
     std::optional<float>  required_g;
+    std::string           printer_serial;
     bool                  cleanup_bound{false};
 };
 
@@ -69,48 +72,30 @@ std::string format_weight(std::optional<float> weight)
 
 struct ParsedSlot
 {
-    std::string ams_id{"-"};
-    std::string slot_id{"-"};
+    std::string ams_id;
+    std::string slot_id;
 };
 
-ParsedSlot parse_slot_label(wxString label)
+std::optional<ParsedSlot> parse_slot_label(wxString label)
 {
     label.Trim(true).Trim(false);
     const std::string text = label.ToStdString();
     if (text.empty() || text == "-")
-        return {};
+        return std::nullopt;
 
-    if (text == "Ext" || text == "Ext-R" || text == "Ext-L")
-        return {text, "0"};
+    if (text == "Ext" || text == "Ext-R")
+        return ParsedSlot{"255", "0"};
 
-    if (text.rfind("HT-", 0) == 0)
-        return {text, "-"};
+    if (text == "Ext-L")
+        return ParsedSlot{"254", "0"};
 
-    if (std::isupper(static_cast<unsigned char>(text[0]))) {
-        const int ams_index = text[0] - 'A';
-        if (text.size() == 1)
-            return {std::to_string(ams_index), "-"};
+    if (text.size() == 4 && text.rfind("HT-", 0) == 0 && text[3] >= 'A' && text[3] <= 'Z')
+        return ParsedSlot{std::to_string(128 + text[3] - 'A'), "0"};
 
-        bool all_digits = true;
-        for (size_t i = 1; i < text.size(); ++i) {
-            if (!std::isdigit(static_cast<unsigned char>(text[i]))) {
-                all_digits = false;
-                break;
-            }
-        }
+    if (text.size() == 2 && text[0] >= 'A' && text[0] <= 'D' && text[1] >= '1' && text[1] <= '4')
+        return ParsedSlot{std::to_string(text[0] - 'A'), std::to_string(text[1] - '1')};
 
-        if (all_digits) {
-            int slot = 0;
-            try {
-                slot = std::stoi(text.substr(1)) - 1;
-            } catch (...) {
-                slot = -1;
-            }
-            return {std::to_string(ams_index), slot >= 0 ? std::to_string(slot) : std::string("-")};
-        }
-    }
-
-    return {text, "-"};
+    return std::nullopt;
 }
 
 wxFont base_font(const wxWindow& item, int point_size, wxFontWeight weight = wxFONTWEIGHT_NORMAL)
@@ -159,11 +144,17 @@ void draw_extra_content(wxDC& dc, const wxWindow& item, const wxSize& bambu_size
     dc.SetTextForeground(text_colour);
     draw_centered_text(dc, wxString::FromUTF8(format_weight(state->required_g)), 0, item.FromDIP(1), size.x, top_h - item.FromDIP(2));
 
-    const ParsedSlot slot = parse_slot_label(slot_label);
+    const std::optional<ParsedSlot> slot = parse_slot_label(slot_label);
+    if (!slot.has_value())
+        return;
+
+    const std::optional<SlotInventory> inventory = slot_inventory(state->printer_serial, slot->ams_id, slot->slot_id);
+    if (!inventory.has_value())
+        return;
 
     wxFont pill_font = font.IsOk() ? font : base_font(item, 12, wxFONTWEIGHT_NORMAL);
     dc.SetFont(pill_font);
-    const wxString pill_text = visible_text(slot.ams_id);
+    const wxString pill_text = visible_text(display_spool_id(inventory->spool_id));
     const wxSize pill_text_size = dc.GetTextExtent(pill_text);
     const wxSize four_char_size = dc.GetTextExtent("0000");
     const int margin = item.FromDIP(5);
@@ -182,7 +173,7 @@ void draw_extra_content(wxDC& dc, const wxWindow& item, const wxSize& bambu_size
     const int slot_y = pill_y + pill_h + item.FromDIP(2) - 1;
     dc.SetFont(font.IsOk() ? font : base_font(item, 12, wxFONTWEIGHT_NORMAL));
     dc.SetTextForeground(text_colour);
-    draw_centered_text(dc, wxString("S:") + visible_text(slot.slot_id), 0, slot_y, size.x, item.FromDIP(20));
+    draw_centered_text(dc, visible_text(display_weight(inventory->weight_net)), 0, slot_y, size.x, item.FromDIP(20));
 }
 
 void apply_item_size(wxWindow& item)
@@ -258,10 +249,13 @@ void end_print_dialog_item_render(wxDC& dc, const wxWindow& item, const wxSize& 
     draw_outer_frame(dc, item, border_colour, border_width, corner_radius, false);
 }
 
-void set_print_dialog_required_weight(wxWindow& item, std::optional<float> required_g)
+void set_print_dialog_required_weight(wxWindow& item, std::optional<float> required_g, const std::string& printer_serial)
 {
+    start_inventory_polling();
+
     ItemState& state = s_item_states[&item];
     state.required_g = required_g;
+    state.printer_serial = printer_serial;
     if (!state.cleanup_bound) {
         item.Bind(wxEVT_DESTROY, [](wxWindowDestroyEvent& event) {
             if (auto* window = dynamic_cast<wxWindow*>(event.GetEventObject()))

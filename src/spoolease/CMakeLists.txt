@@ -3,6 +3,8 @@ add_library(spoolease STATIC
     SpoolEaseConfig.hpp
     SpoolEaseDeviceSlotUi.cpp
     SpoolEaseDeviceSlotUi.hpp
+    SpoolEaseInventory.cpp
+    SpoolEaseInventory.hpp
     SpoolEasePrintDialogUi.cpp
     SpoolEasePrintDialogUi.hpp
 )
@@ -10,4 +12,8 @@ add_library(spoolease STATIC
 target_include_directories(spoolease
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..
     PRIVATE ${Boost_INCLUDE_DIRS}
+)
+
+target_link_libraries(spoolease
+    PRIVATE libcurl OpenSSL::SSL OpenSSL::Crypto
 )

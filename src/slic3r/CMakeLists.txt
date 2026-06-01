@@ -748,7 +748,7 @@ if (WIN32)
     target_include_directories(libslic3r_gui PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../deps/WebView2/include)
 endif()
 
-source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SLIC3R_GUI_SOURCES})
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/.. FILES ${SLIC3R_GUI_SOURCES})
 
 encoding_check(libslic3r_gui)
 

@@ -14,7 +14,11 @@ struct ConsoleConfig
     std::string ca_cert_pem;
 };
 
+std::string config_file_path();
 std::optional<ConsoleConfig> console_config(bool warn);
+std::optional<ConsoleConfig> console_config_for_edit(std::string* error = nullptr);
+bool save_console_config(const ConsoleConfig& config, std::string* error = nullptr);
+bool delete_console_config(std::string* error = nullptr);
 std::string filament_manager_url();
 
 }} // namespace Slic3r::SpoolEase

@@ -11,6 +11,10 @@ on:
         description: 'Successful Build all run ID to publish'
         required: true
         type: string
+      release_tag:
+        description: 'Release tag to create or update'
+        required: true
+        type: string
 
 permissions:
   actions: read
@@ -45,9 +49,11 @@ jobs:
           fi
 
           head_sha=$(gh run view "$RUN_ID" --repo "$REPO" --json headSha --jq .headSha)
-          echo "RELEASE_TAG=build-$RUN_ID" >> "$GITHUB_ENV"
-          echo "RELEASE_NAME=BambuStudio build $RUN_ID" >> "$GITHUB_ENV"
+          run_url=$(gh run view "$RUN_ID" --repo "$REPO" --json url --jq .url)
+          echo "RELEASE_TAG=${{ inputs.release_tag }}" >> "$GITHUB_ENV"
+          echo "RELEASE_NAME=SpoolEase-BambuStudio ${{ inputs.release_tag }}" >> "$GITHUB_ENV"
           echo "RELEASE_TARGET=$head_sha" >> "$GITHUB_ENV"
+          echo "RUN_URL=$run_url" >> "$GITHUB_ENV"
 
       - name: Download Windows and macOS artifacts
         shell: bash
@@ -104,7 +110,7 @@ jobs:
           set -euo pipefail
 
           cat > release-notes.md <<EOF
-          Build artifacts from GitHub Actions run $RUN_ID.
+          Build artifact from [GitHub Actions run $RUN_ID]($RUN_URL).
 
           Install notes:
           - macOS: open the DMG and copy BambuStudio.app to Applications.

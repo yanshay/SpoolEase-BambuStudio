@@ -3,7 +3,6 @@
 #include "slic3r/GUI/GUI_App.hpp"
 #include "slic3r/GUI/wxExtensions.hpp"
 #include "libslic3r/Utils.hpp"
-#include "spoolease/SpoolEaseConfig.hpp"
 
 #if defined(__WXOSX__)
 #include "slic3r/Utils/MacDarkMode.hpp"
@@ -68,12 +67,6 @@ DeviceWebHost::~DeviceWebHost()
 
 wxString DeviceWebHost::BuildUrl(const std::string& path) const
 {
-    if (m_mode == DeviceWebHostMode::FilamentManager) {
-        const std::string spool_ease_url = Slic3r::SpoolEase::filament_manager_url();
-        if (!spool_ease_url.empty())
-            return wxString::FromUTF8(spool_ease_url);
-    }
-
     std::string lang = wxGetApp().app_config->get("language");
     if (lang.empty()) lang = "en";
 

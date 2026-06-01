@@ -16,16 +16,9 @@ const std::string& data_dir();
 
 namespace Slic3r { namespace SpoolEase {
 
-namespace {
-
 namespace fs = boost::filesystem;
 
-std::string config_path()
-{
-    if (Slic3r::data_dir().empty())
-        return {};
-    return (fs::path(Slic3r::data_dir()) / "spoolease" / "config.json").string();
-}
+namespace {
 
 void show_config_warning_once(const std::string& message)
 {
@@ -46,9 +39,16 @@ std::string config_string(const nlohmann::json& object, const char* key)
 
 } // namespace
 
+std::string config_file_path()
+{
+    if (Slic3r::data_dir().empty())
+        return {};
+    return (fs::path(Slic3r::data_dir()) / "spoolease" / "config.json").string();
+}
+
 std::optional<ConsoleConfig> console_config(bool warn)
 {
-    const std::string path = config_path();
+    const std::string path = config_file_path();
 
     try {
         if (!path.empty() && fs::exists(path)) {
@@ -83,7 +83,14 @@ std::optional<ConsoleConfig> console_config(bool warn)
                 return std::nullopt;
             }
 
-            return ConsoleConfig{address, security_key, config_string(section, "api_token"), config_string(section, "ca_cert_pem")};
+            std::string api_token = config_string(section, "api_token");
+            if (api_token.empty()) {
+                if (warn)
+                    show_config_warning_once("SpoolEase configuration is missing 'console.api_token':\n" + path);
+                return std::nullopt;
+            }
+
+            return ConsoleConfig{address, security_key, api_token, config_string(section, "ca_cert_pem")};
         }
     } catch (const std::exception& e) {
         if (warn)
@@ -94,6 +101,116 @@ std::optional<ConsoleConfig> console_config(bool warn)
     }
 
     return std::nullopt;
+}
+
+std::optional<ConsoleConfig> console_config_for_edit(std::string* error)
+{
+    if (error)
+        error->clear();
+
+    const std::string path = config_file_path();
+    try {
+        if (path.empty() || !fs::exists(path))
+            return std::nullopt;
+
+        boost::nowide::ifstream ifs(path);
+        nlohmann::json config;
+        ifs >> config;
+        if (!config.is_object()) {
+            if (error)
+                *error = "SpoolEase configuration file is not a JSON object.";
+            return std::nullopt;
+        }
+
+        const nlohmann::json section = config.value("console", nlohmann::json::object());
+        if (!section.is_object()) {
+            if (error)
+                *error = "SpoolEase configuration is missing object 'console'.";
+            return std::nullopt;
+        }
+
+        return ConsoleConfig{
+            config_string(section, "address"),
+            config_string(section, "security_key"),
+            config_string(section, "api_token"),
+            config_string(section, "ca_cert_pem")
+        };
+    } catch (const std::exception& e) {
+        if (error)
+            *error = e.what();
+    } catch (...) {
+        if (error)
+            *error = "Unknown error.";
+    }
+
+    return std::nullopt;
+}
+
+bool save_console_config(const ConsoleConfig& console, std::string* error)
+{
+    if (error)
+        error->clear();
+
+    const std::string path = config_file_path();
+    try {
+        if (path.empty()) {
+            if (error)
+                *error = "SpoolEase configuration path is empty.";
+            return false;
+        }
+
+        fs::create_directories(fs::path(path).parent_path());
+
+        nlohmann::json config;
+        config["version"] = 1;
+        config["console"] = {
+            {"address", console.address},
+            {"security_key", console.security_key},
+            {"api_token", console.api_token},
+            {"ca_cert_pem", console.ca_cert_pem}
+        };
+
+        boost::nowide::ofstream ofs(path);
+        if (!ofs) {
+            if (error)
+                *error = "Failed to open configuration file for writing.";
+            return false;
+        }
+
+        ofs << config.dump(4) << "\n";
+        return true;
+    } catch (const std::exception& e) {
+        if (error)
+            *error = e.what();
+    } catch (...) {
+        if (error)
+            *error = "Unknown error.";
+    }
+
+    return false;
+}
+
+bool delete_console_config(std::string* error)
+{
+    if (error)
+        error->clear();
+
+    const std::string path = config_file_path();
+    try {
+        if (path.empty())
+            return true;
+        if (fs::exists(path))
+            fs::remove(path);
+        return true;
+    } catch (const std::exception& e) {
+        if (error)
+            *error = e.what();
+    } catch (...) {
+        if (error)
+            *error = "Unknown error.";
+    }
+
+    return false;
 }
 
 std::string filament_manager_url()

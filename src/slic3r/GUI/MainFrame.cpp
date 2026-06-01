@@ -68,6 +68,7 @@
 
 #include "DeviceCore/DevManager.h"
 #include "slic3r/GUI/DeviceWeb/DeviceWebPage.hpp"
+#include "spoolease/SpoolEaseConfigDialog.hpp"
 
 #ifdef _WIN32
 #include <dbt.h>
@@ -3413,6 +3414,7 @@ void MainFrame::init_menubar_as_editor()
 #endif
     // Help menu
     auto helpMenu = generate_help_menu();
+    Slic3r::SpoolEase::install_config_menu(*this, m_menubar, [this](wxMenu* menu, const wxString& title) { if (m_topbar) m_topbar->AddDropDownSubMenu(menu, title); });
 
 #ifndef __APPLE__
     m_topbar->SetFileMenu(fileMenu);

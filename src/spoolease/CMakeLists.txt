@@ -17,3 +17,10 @@ target_include_directories(spoolease
 target_link_libraries(spoolease
     PRIVATE libcurl OpenSSL::SSL OpenSSL::Crypto
 )
+
+set(SLIC3R_GUI_SOURCES
+    ${SLIC3R_GUI_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseConfigDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseConfigDialog.hpp
+    PARENT_SCOPE
+)

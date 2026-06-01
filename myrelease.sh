@@ -2,7 +2,27 @@
 set -euo pipefail
 
 WORKFLOW="publish_build_release.yml"
-DEFAULT_REF="$(git branch --show-current 2>/dev/null || true)"
+
+get_default_ref() {
+  local ref
+
+  ref="$(git branch --show-current 2>/dev/null || true)"
+  if [ -n "$ref" ]; then
+    printf '%s\n' "$ref"
+    return
+  fi
+
+  if command -v jj >/dev/null 2>&1; then
+    ref="$(jj log -r 'latest(::@ & bookmarks(), 1)' --no-graph -T 'bookmarks.join(" ")' 2>/dev/null || true)"
+    ref="${ref%% *}"
+    if [ -n "$ref" ]; then
+      printf '%s\n' "$ref"
+      return
+    fi
+  fi
+}
+
+DEFAULT_REF="$(get_default_ref)"
 
 if ! command -v gh >/dev/null 2>&1; then
   echo "gh CLI is required." >&2

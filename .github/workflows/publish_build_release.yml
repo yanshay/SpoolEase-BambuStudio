@@ -1,0 +1,115 @@
+name: Publish build release
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Successful Build all run ID to publish'
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    name: Publish build release
+    runs-on: macos-15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_ID: ${{ inputs.run_id }}
+      REPO: ${{ github.repository }}
+
+    steps:
+      - name: Check build run
+        shell: bash
+        run: |
+          conclusion=$(gh run view "$RUN_ID" --repo "$REPO" --json conclusion --jq .conclusion)
+          if [ "$conclusion" != "success" ]; then
+            echo "Build run $RUN_ID conclusion is '$conclusion', expected 'success'." >&2
+            exit 1
+          fi
+
+          head_sha=$(gh run view "$RUN_ID" --repo "$REPO" --json headSha --jq .headSha)
+          echo "RELEASE_TAG=build-$RUN_ID" >> "$GITHUB_ENV"
+          echo "RELEASE_NAME=BambuStudio build $RUN_ID" >> "$GITHUB_ENV"
+          echo "RELEASE_TARGET=$head_sha" >> "$GITHUB_ENV"
+
+      - name: Download Windows and macOS artifacts
+        shell: bash
+        run: |
+          gh run download "$RUN_ID" \
+            --repo "$REPO" \
+            --dir artifacts \
+            --pattern 'BambuStudio_Windows_*_portable' \
+            --pattern 'BambuStudio_Mac_arm64_*'
+
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p release unpack/mac dmg-root
+
+          windows_zip=$(find artifacts -type f -name 'BambuStudio_Windows_*_portable.zip' -print -quit)
+          if [ -z "$windows_zip" ]; then
+            echo "Could not find Windows portable zip in downloaded artifacts." >&2
+            exit 1
+          fi
+          cp "$windows_zip" release/
+
+          mac_zip=$(find artifacts -type f -name 'BambuStudio_Mac_arm64_*.zip' -print -quit)
+          if [ -z "$mac_zip" ]; then
+            echo "Could not find macOS build zip in downloaded artifacts." >&2
+            exit 1
+          fi
+
+          unzip -q "$mac_zip" -d unpack/mac
+          mac_app=$(find unpack/mac -type d -path '*/build/universal/BambuStudio/BambuStudio.app' -print -quit)
+          if [ -z "$mac_app" ]; then
+            echo "Could not find universal BambuStudio.app inside macOS artifact." >&2
+            exit 1
+          fi
+
+          ditto "$mac_app" dmg-root/BambuStudio.app
+          ln -s /Applications dmg-root/Applications
+
+          mac_version=$(basename "$mac_zip" .zip | sed 's/^BambuStudio_Mac_arm64_//')
+          hdiutil create \
+            -volname BambuStudio \
+            -srcfolder dmg-root \
+            -ov \
+            -format UDZO \
+            "release/BambuStudio_Mac_universal_${mac_version}.dmg"
+
+          ls -lh release
+
+      - name: Publish prerelease
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat > release-notes.md <<EOF
+          Build artifacts from GitHub Actions run $RUN_ID.
+
+          Install notes:
+          - macOS: open the DMG and copy BambuStudio.app to Applications.
+          - Windows: extract the portable zip and run bambu-studio.exe from the extracted folder.
+          EOF
+
+          if gh release view "$RELEASE_TAG" --repo "$REPO" >/dev/null 2>&1; then
+            is_prerelease=$(gh release view "$RELEASE_TAG" --repo "$REPO" --json isPrerelease --jq .isPrerelease)
+            if [ "$is_prerelease" != "true" ]; then
+              echo "Release $RELEASE_TAG already exists and is not a prerelease." >&2
+              exit 1
+            fi
+            gh release upload "$RELEASE_TAG" release/* --repo "$REPO" --clobber
+          else
+            gh release create "$RELEASE_TAG" release/* \
+              --repo "$REPO" \
+              --target "$RELEASE_TARGET" \
+              --title "$RELEASE_NAME" \
+              --notes-file release-notes.md \
+              --prerelease
+          fi

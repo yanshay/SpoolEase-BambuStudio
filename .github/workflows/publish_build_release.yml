@@ -1,6 +1,10 @@
 name: Publish build release
 
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/publish_build_release.yml'
+
   workflow_dispatch:
     inputs:
       run_id:
@@ -13,8 +17,17 @@ permissions:
   contents: write
 
 jobs:
+  register:
+    name: Register workflow
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Register workflow
+        run: true
+
   publish:
     name: Publish build release
+    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-15
     env:
       GH_TOKEN: ${{ github.token }}

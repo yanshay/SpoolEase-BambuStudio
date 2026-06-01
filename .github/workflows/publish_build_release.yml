@@ -76,7 +76,7 @@ jobs:
             echo "Could not find Windows portable zip in downloaded artifacts." >&2
             exit 1
           fi
-          cp "$windows_zip" release/
+          cp "$windows_zip" "release/SE_$(basename "$windows_zip")"
 
           mac_zip=$(find artifacts -type f -name 'BambuStudio_Mac_arm64_*.zip' -print -quit)
           if [ -z "$mac_zip" ]; then
@@ -100,7 +100,7 @@ jobs:
             -srcfolder dmg-root \
             -ov \
             -format UDZO \
-            "release/BambuStudio_Mac_universal_${mac_version}.dmg"
+            "release/SE_BambuStudio_Mac_universal_${mac_version}.dmg"
 
           ls -lh release
 

@@ -213,7 +213,7 @@ bool delete_console_config(std::string* error)
     return false;
 }
 
-std::string filament_manager_url()
+std::string inventory_url()
 {
     start_inventory_polling();
 

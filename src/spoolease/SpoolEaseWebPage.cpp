@@ -21,7 +21,7 @@ public:
         sizer->Add(m_webview, 1, wxEXPAND);
         SetSizer(sizer);
 
-        const std::string url = filament_manager_url();
+        const std::string url = inventory_url();
         if (!url.empty())
             m_webview->load_url(wxString::FromUTF8(url));
 

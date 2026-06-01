@@ -385,6 +385,7 @@ public:
 
     CalibrationPanel*     m_calibration{ nullptr };
     DeviceWebPage*        m_web_device{ nullptr };
+    wxWindow*             m_spoolease_page{ nullptr };
     WebViewPanel*         m_webview { nullptr };
     PrinterWebView*       m_printer_view{nullptr};
     wxLogWindow*          m_log_window { nullptr };

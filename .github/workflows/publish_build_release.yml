@@ -110,11 +110,20 @@ jobs:
           set -euo pipefail
 
           cat > release-notes.md <<EOF
-          Build artifact from [GitHub Actions run $RUN_ID]($RUN_URL).
+          Build artifacts from [GitHub Actions run $RUN_ID]($RUN_URL).
 
-          Install notes:
+          Download notes:
+          - Expand the Assets section below.
+          - Download the appropriate file for your operating system.
+
+          Installation notes:
           - macOS: open the DMG and copy BambuStudio.app to Applications.
           - Windows: extract the portable zip and run bambu-studio.exe from the extracted folder.
+
+          Bypassing unsigned app warnings:
+          - On both operating systems, you may need to bypass protection for unsigned apps.
+          - Try the instructions at: https://github.com/daltonmenezes/electron-app/blob/main/docs/UNSIGNED_APPS.md
+          - If those do not work, try: https://github.com/yanshay/SpoolEase/releases/tag/SpoolEase-Desktop-r0.1.0
           EOF
 
           if gh release view "$RELEASE_TAG" --repo "$REPO" >/dev/null 2>&1; then

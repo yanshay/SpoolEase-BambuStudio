@@ -253,7 +253,7 @@ private:
         m_scrolled_window = new SpoolEaseScrolledWindow(this);
         m_scrolled_window->SetBackgroundColour(*wxWHITE);
         m_scrolled_window->SetScrollRate(5, 5);
-        m_scrolled_window->SetMinSize(wxSize(FromDIP(620), FromDIP(570)));
+        m_scrolled_window->SetMinSize(wxSize(FromDIP(620), FromDIP(610)));
 
         auto* body_sizer = new wxBoxSizer(wxVERTICAL);
         auto* top_line = new wxPanel(m_scrolled_window, wxID_ANY, wxDefaultPosition, wxSize(FromDIP(540), 1), wxTAB_TRAVERSAL);
@@ -308,6 +308,13 @@ private:
         status_row->Add(m_status, 1, wxEXPAND);
         page_sizer->Add(status_row, 0, wxEXPAND | wxTOP, FromDIP(8));
 
+        auto* api_note = make_label(page, _L("The API token and CA certificate can be obtained from the SpoolEase web application under Settings → API tab."), DESIGN_GRAY600_COLOR, Label::Body_13);
+        api_note->Wrap(FromDIP(470));
+        auto* api_note_row = new wxBoxSizer(wxHORIZONTAL);
+        api_note_row->AddSpacer(FromDIP(23));
+        api_note_row->Add(api_note, 1, wxEXPAND);
+        page_sizer->Add(api_note_row, 0, wxEXPAND | wxTOP, FromDIP(4));
+
         page->SetSizer(page_sizer);
         body_sizer->Add(page, 0, wxEXPAND | wxLEFT | wxRIGHT, FromDIP(38));
         body_sizer->AddSpacer(FromDIP(28));
@@ -332,8 +339,8 @@ private:
         main_sizer->Add(button_panel, 0, wxEXPAND | wxALL, FromDIP(18));
 
         SetSizer(main_sizer);
-        SetMinSize(wxSize(FromDIP(660), FromDIP(700)));
-        SetSize(wxSize(FromDIP(660), FromDIP(720)));
+        SetMinSize(wxSize(FromDIP(660), FromDIP(740)));
+        SetSize(wxSize(FromDIP(660), FromDIP(760)));
         Layout();
         CenterOnParent();
         SetEscapeId(wxID_CANCEL);

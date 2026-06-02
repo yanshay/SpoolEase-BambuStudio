@@ -18,6 +18,10 @@ target_link_libraries(spoolease
     PRIVATE libcurl OpenSSL::SSL OpenSSL::Crypto
 )
 
+if (SLIC3R_STATIC)
+    target_compile_definitions(spoolease PRIVATE wxDEBUG_LEVEL=0)
+endif()
+
 set(SLIC3R_GUI_SOURCES
     ${SLIC3R_GUI_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseConfigDialog.cpp

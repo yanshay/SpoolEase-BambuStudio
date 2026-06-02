@@ -219,6 +219,12 @@ public:
         m_thread = std::thread([this]() { run(); });
     }
 
+    void refresh_now()
+    {
+        start();
+        m_wake = true;
+    }
+
     std::optional<SlotInventory> lookup(const std::string& printer_serial, const std::string& ams_id, const std::string& slot_id)
     {
         if (printer_serial.empty() || ams_id.empty() || slot_id.empty())
@@ -235,7 +241,7 @@ private:
         while (!m_stop) {
             poll_once();
             const auto until = std::chrono::steady_clock::now() + poll_interval;
-            while (!m_stop && std::chrono::steady_clock::now() < until)
+            while (!m_stop && !m_wake.exchange(false) && std::chrono::steady_clock::now() < until)
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
@@ -301,6 +307,7 @@ private:
     std::mutex m_cache_mutex;
     std::thread m_thread;
     std::atomic_bool m_stop{false};
+    std::atomic_bool m_wake{false};
     bool m_started{false};
     std::string m_config_key;
     std::unordered_map<std::string, SlotInventory> m_cache;
@@ -317,6 +324,11 @@ InventoryPoller& poller()
 void start_inventory_polling()
 {
     poller().start();
+}
+
+void refresh_inventory_now()
+{
+    poller().refresh_now();
 }
 
 std::optional<SlotInventory> slot_inventory(const std::string& printer_serial, const std::string& ams_id, const std::string& slot_id)

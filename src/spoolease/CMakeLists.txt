@@ -5,6 +5,8 @@ add_library(spoolease STATIC
     SpoolEaseDeviceSlotUi.hpp
     SpoolEaseInventory.cpp
     SpoolEaseInventory.hpp
+    SpoolEaseLog.cpp
+    SpoolEaseLog.hpp
     SpoolEasePrintDialogUi.cpp
     SpoolEasePrintDialogUi.hpp
 )

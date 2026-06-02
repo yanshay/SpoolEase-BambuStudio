@@ -304,19 +304,26 @@ private:
         pem_row->Add(m_ca_cert, 1, wxEXPAND);
         page_sizer->Add(pem_row, 0, wxEXPAND | wxTOP, FromDIP(8));
 
+        auto* api_note = make_label(page, _L("The API token and CA certificate can be obtained from the SpoolEase web application under Settings (Gear Icon) → API tab."), DESIGN_GRAY600_COLOR, Label::Body_13);
+        api_note->Wrap(FromDIP(540));
+        auto* api_note_row = new wxBoxSizer(wxHORIZONTAL);
+        api_note_row->AddSpacer(FromDIP(23));
+        api_note_row->Add(api_note, 1, wxEXPAND);
+        page_sizer->Add(api_note_row, 0, wxEXPAND | wxTOP, FromDIP(8));
+
+        auto* security_key_note = make_label(page, _L("SecurityKey is the key you set in the SpoolEase web config for signing in to the SpoolEase web application."), DESIGN_GRAY600_COLOR, Label::Body_13);
+        security_key_note->Wrap(FromDIP(540));
+        auto* security_key_note_row = new wxBoxSizer(wxHORIZONTAL);
+        security_key_note_row->AddSpacer(FromDIP(23));
+        security_key_note_row->Add(security_key_note, 1, wxEXPAND);
+        page_sizer->Add(security_key_note_row, 0, wxEXPAND | wxTOP, FromDIP(4));
+
         m_status = make_label(page, wxEmptyString, DESIGN_GRAY600_COLOR, Label::Body_13);
         m_status->SetMinSize(wxSize(-1, FromDIP(20)));
         auto* status_row = new wxBoxSizer(wxHORIZONTAL);
         status_row->AddSpacer(FromDIP(23));
         status_row->Add(m_status, 1, wxEXPAND);
         page_sizer->Add(status_row, 0, wxEXPAND | wxTOP, FromDIP(8));
-
-        auto* api_note = make_label(page, _L("The API token and CA certificate can be obtained from the SpoolEase web application under Settings (Gear Icon) → API tab."), DESIGN_GRAY600_COLOR, Label::Body_13);
-        api_note->Wrap(FromDIP(470));
-        auto* api_note_row = new wxBoxSizer(wxHORIZONTAL);
-        api_note_row->AddSpacer(FromDIP(23));
-        api_note_row->Add(api_note, 1, wxEXPAND);
-        page_sizer->Add(api_note_row, 0, wxEXPAND | wxTOP, FromDIP(4));
 
         page->SetSizer(page_sizer);
         body_sizer->Add(page, 0, wxEXPAND | wxLEFT | wxRIGHT, FromDIP(38));
@@ -532,7 +539,7 @@ private:
     {
         m_status->SetForegroundColour(themed(error ? DESIGN_RED_COLOR : DESIGN_GRAY600_COLOR));
         m_status->SetLabel(message);
-        m_status->Wrap(FromDIP(470));
+        m_status->Wrap(FromDIP(540));
         Layout();
     }
 

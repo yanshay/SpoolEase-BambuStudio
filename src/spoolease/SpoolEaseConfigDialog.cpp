@@ -1,6 +1,7 @@
 #include "SpoolEaseConfigDialog.hpp"
 
 #include "SpoolEaseConfig.hpp"
+#include "SpoolEaseLog.hpp"
 
 #include "slic3r/GUI/GUI_App.hpp"
 #include "slic3r/GUI/GUI_Utils.hpp"
@@ -205,6 +206,8 @@ public:
     explicit ConfigDialog(wxWindow* parent)
         : Slic3r::GUI::DPIDialog(parent, wxID_ANY, _L("SpoolEase Settings"), wxDefaultPosition, wxDefaultSize, wxSYSTEM_MENU | wxCAPTION | wxCLOSE_BOX)
     {
+        SPOOLEASE_LOG(info) << "SpoolEase: settings dialog opened";
+
         SetBackgroundColour(*wxWHITE);
         build_ui();
         load_config();
@@ -600,6 +603,7 @@ private:
 
         std::string io_error;
         if (m_erase_requested || all_fields_empty()) {
+            SPOOLEASE_LOG(info) << "SpoolEase: settings apply: action=" << (m_erase_requested ? "erase" : "no_config");
             if (!delete_console_config(&io_error)) {
                 set_status(wxString::Format(_L("Failed to erase config: %s"), wxString::FromUTF8(io_error)), true);
                 return;
@@ -614,6 +618,7 @@ private:
         config.api_token = field_value(m_api_token);
         config.ca_cert_pem = m_provide_ca->GetValue() ? pem_value(m_ca_cert) : std::string();
 
+        SPOOLEASE_LOG(info) << "SpoolEase: settings apply: action=save";
         if (!save_console_config(config, &io_error)) {
             set_status(wxString::Format(_L("Failed to save config: %s"), wxString::FromUTF8(io_error)), true);
             return;
@@ -672,12 +677,14 @@ void install_config_menu(wxWindow& parent, wxMenuBar* menubar, AddTopbarSubmenuF
             menubar->Insert(help_index, menu, wxString::Format("&%s", title));
         else
             menubar->Append(menu, wxString::Format("&%s", title));
+        SPOOLEASE_LOG(info) << "SpoolEase: settings menu installed";
         return;
     }
 #endif
 
     if (add_topbar_submenu) {
         add_topbar_submenu(menu, title);
+        SPOOLEASE_LOG(info) << "SpoolEase: settings menu installed";
         return;
     }
 
@@ -687,6 +694,7 @@ void install_config_menu(wxWindow& parent, wxMenuBar* menubar, AddTopbarSubmenuF
             menubar->Insert(help_index, menu, title);
         else
             menubar->Append(menu, title);
+        SPOOLEASE_LOG(info) << "SpoolEase: settings menu installed";
         return;
     }
 

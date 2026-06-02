@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp>
 
 #include <wx/msgdlg.h>
+#include <wx/app.h>
 
 #include <exception>
 
@@ -15,6 +16,8 @@ const std::string& data_dir();
 }
 
 namespace Slic3r { namespace SpoolEase {
+
+wxDEFINE_EVENT(EVT_SPOOLEASE_CONFIG_CHANGED, wxCommandEvent);
 
 namespace fs = boost::filesystem;
 
@@ -27,6 +30,17 @@ void show_config_warning_once(const std::string& message)
         return;
     shown = true;
     wxMessageBox(wxString::FromUTF8(message), wxString::FromUTF8("SpoolEase configuration"), wxOK | wxICON_WARNING);
+}
+
+void notify_config_changed()
+{
+    refresh_inventory_now();
+
+    if (!wxTheApp)
+        return;
+
+    wxCommandEvent event(EVT_SPOOLEASE_CONFIG_CHANGED);
+    wxPostEvent(wxTheApp, event);
 }
 
 std::string config_string(const nlohmann::json& object, const char* key)
@@ -178,6 +192,14 @@ bool save_console_config(const ConsoleConfig& console, std::string* error)
         }
 
         ofs << config.dump(4) << "\n";
+        ofs.close();
+        if (!ofs) {
+            if (error)
+                *error = "Failed to write configuration file.";
+            return false;
+        }
+
+        notify_config_changed();
         return true;
     } catch (const std::exception& e) {
         if (error)
@@ -197,10 +219,13 @@ bool delete_console_config(std::string* error)
 
     const std::string path = config_file_path();
     try {
-        if (path.empty())
+        if (path.empty()) {
+            notify_config_changed();
             return true;
+        }
         if (fs::exists(path))
             fs::remove(path);
+        notify_config_changed();
         return true;
     } catch (const std::exception& e) {
         if (error)

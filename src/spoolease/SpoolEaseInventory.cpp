@@ -1,15 +1,20 @@
 #include "SpoolEaseInventory.hpp"
 
 #include "SpoolEaseConfig.hpp"
+#include "SpoolEaseLog.hpp"
 
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
+#include <openssl/x509.h>
 
 #include <wx/app.h>
 #include <wx/window.h>
 
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
+#include <cctype>
 #include <iomanip>
 #include <mutex>
 #include <sstream>
@@ -23,6 +28,12 @@ namespace {
 constexpr auto poll_interval = std::chrono::seconds(5);
 
 std::once_flag s_curl_init_once;
+
+struct ParseSlotsResult
+{
+    std::optional<std::unordered_map<std::string, SlotInventory>> cache;
+    std::string                                                   error;
+};
 
 std::string cache_key(const std::string& printer_serial, const std::string& ams_id, const std::string& slot_id)
 {
@@ -49,16 +60,105 @@ std::string api_url(const ConsoleConfig& config)
     return "https://" + address + "/api/internal/printers/slots";
 }
 
+const char* curl_code_name(CURLcode code)
+{
+    switch (code) {
+    case CURLE_OK: return "CURLE_OK";
+    case CURLE_UNSUPPORTED_PROTOCOL: return "CURLE_UNSUPPORTED_PROTOCOL";
+    case CURLE_URL_MALFORMAT: return "CURLE_URL_MALFORMAT";
+    case CURLE_COULDNT_RESOLVE_PROXY: return "CURLE_COULDNT_RESOLVE_PROXY";
+    case CURLE_COULDNT_RESOLVE_HOST: return "CURLE_COULDNT_RESOLVE_HOST";
+    case CURLE_COULDNT_CONNECT: return "CURLE_COULDNT_CONNECT";
+    case CURLE_READ_ERROR: return "CURLE_READ_ERROR";
+    case CURLE_OUT_OF_MEMORY: return "CURLE_OUT_OF_MEMORY";
+    case CURLE_OPERATION_TIMEDOUT: return "CURLE_OPERATION_TIMEDOUT";
+    case CURLE_SSL_CONNECT_ERROR: return "CURLE_SSL_CONNECT_ERROR";
+    case CURLE_ABORTED_BY_CALLBACK: return "CURLE_ABORTED_BY_CALLBACK";
+    case CURLE_BAD_FUNCTION_ARGUMENT: return "CURLE_BAD_FUNCTION_ARGUMENT";
+    case CURLE_GOT_NOTHING: return "CURLE_GOT_NOTHING";
+    case CURLE_SEND_ERROR: return "CURLE_SEND_ERROR";
+    case CURLE_RECV_ERROR: return "CURLE_RECV_ERROR";
+    case CURLE_SSL_CERTPROBLEM: return "CURLE_SSL_CERTPROBLEM";
+    case CURLE_SSL_CIPHER: return "CURLE_SSL_CIPHER";
+    case CURLE_PEER_FAILED_VERIFICATION: return "CURLE_PEER_FAILED_VERIFICATION";
+    case CURLE_SSL_ENGINE_INITFAILED: return "CURLE_SSL_ENGINE_INITFAILED";
+    case CURLE_SSL_CACERT_BADFILE: return "CURLE_SSL_CACERT_BADFILE";
+    default: return "CURLE_UNKNOWN";
+    }
+}
+
+bool is_tls_error(CURLcode code)
+{
+    switch (code) {
+    case CURLE_PEER_FAILED_VERIFICATION:
+    case CURLE_SSL_CONNECT_ERROR:
+    case CURLE_SSL_CERTPROBLEM:
+    case CURLE_SSL_CACERT_BADFILE:
+    case CURLE_SSL_CIPHER:
+    case CURLE_SSL_ENGINE_INITFAILED:
+        return true;
+    default:
+        return false;
+    }
+}
+
+std::string clean_curl_error(const std::array<char, CURL_ERROR_SIZE>& error, CURLcode code)
+{
+    const char* begin = error.data();
+    const char* end = std::find(begin, begin + error.size(), '\0');
+    std::string message(begin, end);
+    if (message.empty())
+        message = curl_easy_strerror(code);
+    return message;
+}
+
+long request_size_bytes(CURL* curl)
+{
+    long request_bytes = 0;
+#ifdef CURLINFO_REQUEST_SIZE
+    curl_easy_getinfo(curl, CURLINFO_REQUEST_SIZE, &request_bytes);
+#endif
+    return request_bytes;
+}
+
+long long total_time_ms(CURL* curl)
+{
+#ifdef CURLINFO_TOTAL_TIME_T
+    curl_off_t total_us = 0;
+    if (curl_easy_getinfo(curl, CURLINFO_TOTAL_TIME_T, &total_us) == CURLE_OK && total_us >= 0)
+        return static_cast<long long>((total_us + 999) / 1000);
+#endif
+
+    double total_seconds = 0.0;
+    if (curl_easy_getinfo(curl, CURLINFO_TOTAL_TIME, &total_seconds) == CURLE_OK && total_seconds >= 0.0)
+        return static_cast<long long>(total_seconds * 1000.0 + 0.5);
+    return 0;
+}
+
+std::string lower_copy(std::string value)
+{
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    return value;
+}
+
+std::string tls_verify_reason(long verify_result)
+{
+    const char* reason = X509_verify_cert_error_string(verify_result);
+    return reason ? std::string(reason) : std::string();
+}
+
 std::optional<std::string> fetch_slots_json(const ConsoleConfig& config)
 {
     std::call_once(s_curl_init_once, []() { curl_global_init(CURL_GLOBAL_DEFAULT); });
 
     CURL* curl = curl_easy_init();
-    if (!curl)
+    if (!curl) {
+        SPOOLEASE_LOG(error) << "SpoolEase: API curl init failed";
         return std::nullopt;
+    }
 
     std::string body;
-    std::string error(CURL_ERROR_SIZE, '\0');
+    std::array<char, CURL_ERROR_SIZE> error{};
     struct curl_slist* headers = nullptr;
     const std::string auth_header = "Authorization: Bearer " + config.api_token;
     headers = curl_slist_append(headers, auth_header.c_str());
@@ -93,14 +193,62 @@ std::optional<std::string> fetch_slots_json(const ConsoleConfig& config)
     }
 
     const CURLcode result = curl_easy_perform(curl);
+
     long status = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+    const long request_bytes = request_size_bytes(curl);
+    const long long total_ms = total_time_ms(curl);
+
+    char* content_type_raw = nullptr;
+    curl_easy_getinfo(curl, CURLINFO_CONTENT_TYPE, &content_type_raw);
+    const std::string content_type = content_type_raw ? std::string(content_type_raw) : std::string();
+
+    long verify_result = 0;
+    curl_easy_getinfo(curl, CURLINFO_SSL_VERIFYRESULT, &verify_result);
 
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
 
-    if (result != CURLE_OK || status != 200)
+    if (result != CURLE_OK) {
+        const std::string error_message = clean_curl_error(error, result);
+        SPOOLEASE_LOG(warning) << "SpoolEase: API request failed: method=GET url=" << url
+                               << " status=" << status
+                               << " curl_code=" << static_cast<int>(result)
+                               << " curl_name=" << curl_code_name(result)
+                               << " error=\"" << error_message << "\""
+                               << " request_bytes=" << request_bytes
+                               << " request_body_bytes=0"
+                               << " response_body_bytes=" << body.size()
+                               << " total_ms=" << total_ms;
+
+        if (is_tls_error(result)) {
+            SPOOLEASE_LOG(warning) << "SpoolEase: API TLS verification failed: url=" << url
+                                   << " curl_code=" << static_cast<int>(result)
+                                   << " curl_name=" << curl_code_name(result)
+                                   << " verify_result=" << verify_result
+                                   << " verify_reason=\"" << tls_verify_reason(verify_result) << "\""
+                                   << " error=\"" << error_message << "\""
+                                   << " total_ms=" << total_ms;
+        }
         return std::nullopt;
+    }
+
+    if (status != 200) {
+        SPOOLEASE_LOG(warning) << "SpoolEase: API returned non-200: method=GET url=" << url
+                               << " status=" << status
+                               << " request_bytes=" << request_bytes
+                               << " request_body_bytes=0"
+                               << " response_body_bytes=" << body.size()
+                               << " total_ms=" << total_ms;
+        return std::nullopt;
+    }
+
+    if (!content_type.empty() && lower_copy(content_type).find("json") == std::string::npos) {
+        SPOOLEASE_LOG(warning) << "SpoolEase: API response content type unexpected: url=" << url
+                               << " status=" << status
+                               << " content_type=\"" << content_type << "\""
+                               << " response_body_bytes=" << body.size();
+    }
 
     return body;
 }
@@ -137,13 +285,16 @@ bool cache_equals(const std::unordered_map<std::string, SlotInventory>& lhs, con
     return true;
 }
 
-std::optional<std::unordered_map<std::string, SlotInventory>> parse_slots_json(const std::string& body)
+ParseSlotsResult parse_slots_json(const std::string& body)
 {
+    ParseSlotsResult result;
     std::unordered_map<std::string, SlotInventory> cache;
     const nlohmann::json root = nlohmann::json::parse(body);
     const auto printers_it = root.find("printers");
-    if (printers_it == root.end() || !printers_it->is_array())
-        return std::nullopt;
+    if (printers_it == root.end() || !printers_it->is_array()) {
+        result.error = "missing or invalid root.printers array";
+        return result;
+    }
 
     for (const auto& printer : *printers_it) {
         if (!printer.is_object() || json_string(printer, "kind") != "Bambu")
@@ -183,7 +334,8 @@ std::optional<std::unordered_map<std::string, SlotInventory>> parse_slots_json(c
         }
     }
 
-    return cache;
+    result.cache = std::move(cache);
+    return result;
 }
 
 void request_ui_refresh()
@@ -238,12 +390,14 @@ public:
 private:
     void run()
     {
+        SPOOLEASE_LOG(info) << "SpoolEase: API loop started";
         while (!m_stop) {
             poll_once();
             const auto until = std::chrono::steady_clock::now() + poll_interval;
             while (!m_stop && !m_wake.exchange(false) && std::chrono::steady_clock::now() < until)
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
+        SPOOLEASE_LOG(info) << "SpoolEase: API loop stopped";
     }
 
     void note_config_key(const std::string& key)
@@ -282,8 +436,8 @@ private:
 
     void poll_once()
     {
-        const std::optional<ConsoleConfig> config = console_config(false);
-        if (!config.has_value() || config->address.empty() || config->api_token.empty()) {
+        const std::optional<ConsoleConfig> config = console_config(false, "api_loop");
+        if (!config.has_value()) {
             note_config_key({});
             return;
         }
@@ -294,11 +448,24 @@ private:
         if (!body.has_value())
             return;
 
+        const std::string url = api_url(*config);
         try {
-            std::optional<std::unordered_map<std::string, SlotInventory>> parsed = parse_slots_json(*body);
-            if (parsed.has_value())
-                replace_cache(std::move(*parsed));
+            ParseSlotsResult parsed = parse_slots_json(*body);
+            if (parsed.cache.has_value()) {
+                replace_cache(std::move(*parsed.cache));
+            } else {
+                SPOOLEASE_LOG(warning) << "SpoolEase: API JSON schema invalid: url=" << url
+                                       << " response_body_bytes=" << body->size()
+                                       << " reason=\"" << parsed.error << "\"";
+            }
+        } catch (const std::exception& e) {
+            SPOOLEASE_LOG(warning) << "SpoolEase: API JSON parse failed: url=" << url
+                                   << " response_body_bytes=" << body->size()
+                                   << " error=\"" << e.what() << "\"";
         } catch (...) {
+            SPOOLEASE_LOG(warning) << "SpoolEase: API JSON parse failed: url=" << url
+                                   << " response_body_bytes=" << body->size()
+                                   << " error=\"unknown error\"";
         }
     }
 

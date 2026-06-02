@@ -19,11 +19,11 @@ struct ConsoleConfig
 wxDECLARE_EVENT(EVT_SPOOLEASE_CONFIG_CHANGED, wxCommandEvent);
 
 std::string config_file_path();
-std::optional<ConsoleConfig> console_config(bool warn);
+std::optional<ConsoleConfig> console_config(bool warn, const char* source = nullptr);
 std::optional<ConsoleConfig> console_config_for_edit(std::string* error = nullptr);
 bool save_console_config(const ConsoleConfig& config, std::string* error = nullptr);
 bool delete_console_config(std::string* error = nullptr);
-std::string inventory_url();
+std::string web_page_url();
 
 }} // namespace Slic3r::SpoolEase
 

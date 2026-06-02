@@ -1,13 +1,12 @@
 #include "SpoolEaseWebPage.hpp"
 
 #include "SpoolEaseConfig.hpp"
+#include "SpoolEaseLog.hpp"
 
 #include "libslic3r/Utils.hpp"
 
 #include "slic3r/GUI/GUI_App.hpp"
-#include "slic3r/GUI/PrinterWebView.hpp"
 #include "slic3r/GUI/Widgets/StateColor.hpp"
-#include "slic3r/GUI/Widgets/WebView.hpp"
 
 #include <boost/filesystem.hpp>
 #include <boost/nowide/fstream.hpp>
@@ -21,6 +20,7 @@
 #include <iomanip>
 #include <optional>
 #include <sstream>
+#include <utility>
 #include <vector>
 
 namespace Slic3r { namespace SpoolEase {
@@ -71,6 +71,10 @@ std::string read_text_file(const fs::path& path)
 
 std::string status_template()
 {
+    static std::optional<std::string> cached_template;
+    if (cached_template.has_value())
+        return *cached_template;
+
     std::vector<fs::path> candidates;
 
 #ifdef SPOOLEASE_SOURCE_DIR
@@ -84,11 +88,42 @@ std::string status_template()
         if (!fs::exists(candidate))
             continue;
         std::string html = read_text_file(candidate);
-        if (!html.empty())
-            return html;
+        if (!html.empty()) {
+            SPOOLEASE_LOG(info) << "SpoolEase: web fallback template loaded: path=" << candidate.string();
+            cached_template = std::move(html);
+            return *cached_template;
+        }
     }
 
-    return fallback_status_template();
+    const std::string expected_path = candidates.empty() ? std::string() : candidates.front().string();
+    SPOOLEASE_LOG(warning) << "SpoolEase: web fallback template missing: expected_path=" << expected_path << "; using embedded fallback";
+    cached_template = fallback_status_template();
+    return *cached_template;
+}
+
+std::string to_utf8(const wxString& text)
+{
+    const wxScopedCharBuffer buffer = text.ToUTF8();
+    return buffer.data() ? std::string(buffer.data()) : std::string();
+}
+
+std::string redacted_web_page_url(const std::string& url)
+{
+    const std::string marker = "#sk=";
+    const size_t pos = url.find(marker);
+    if (pos == std::string::npos)
+        return url;
+    return url.substr(0, pos + marker.size()) + "<redacted>";
+}
+
+const char* status_name(StatusPage status)
+{
+    switch (status) {
+    case StatusPage::NotConfigured: return "not_configured";
+    case StatusPage::NotAvailable: return "not_available";
+    }
+
+    return "unknown";
 }
 
 std::string colour_to_html(const wxColour& colour)
@@ -153,7 +188,7 @@ std::string status_message(StatusPage status)
 std::string status_detail(StatusPage status)
 {
     if (status == StatusPage::NotConfigured)
-        return "SpoolEase inventory will appear here after settings are saved.";
+        return "The SpoolEase web page will appear here after settings are saved.";
     return "Bambu Studio will keep retrying automatically every 5 seconds.";
 }
 
@@ -181,11 +216,17 @@ public:
         : wxPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize)
         , m_retry_timer(this)
     {
-        m_webview = new Slic3r::GUI::PrinterWebView(this);
-        m_webview->SetMinSize(wxSize(FromDIP(320), FromDIP(260)));
+        SPOOLEASE_LOG(info) << "SpoolEase: web page created";
+
+        m_webview = wxWebView::New(this, wxID_ANY);
+        if (m_webview)
+            m_webview->SetMinSize(wxSize(FromDIP(320), FromDIP(260)));
+        else
+            SPOOLEASE_LOG(error) << "SpoolEase: web page wxWebView init failed";
 
         auto* sizer = new wxBoxSizer(wxVERTICAL);
-        sizer->Add(m_webview, 1, wxEXPAND);
+        if (m_webview)
+            sizer->Add(m_webview, 1, wxEXPAND);
         SetSizer(sizer);
 
         bind_events();
@@ -213,9 +254,9 @@ private:
         if (wxTheApp)
             wxTheApp->Bind(EVT_SPOOLEASE_CONFIG_CHANGED, &SpoolEaseWebPage::on_config_changed, this);
 
-        if (wxWebView* webview = m_webview ? m_webview->GetWebView() : nullptr) {
-            webview->Bind(wxEVT_WEBVIEW_ERROR, &SpoolEaseWebPage::on_webview_error, this);
-            webview->Bind(wxEVT_WEBVIEW_LOADED, &SpoolEaseWebPage::on_webview_loaded, this);
+        if (m_webview) {
+            m_webview->Bind(wxEVT_WEBVIEW_ERROR, &SpoolEaseWebPage::on_webview_error, this);
+            m_webview->Bind(wxEVT_WEBVIEW_LOADED, &SpoolEaseWebPage::on_webview_loaded, this);
         }
     }
 
@@ -233,7 +274,7 @@ private:
                 if (m_status_page.has_value())
                     show_status_page(*m_status_page);
                 if (!m_current_url.empty() && !m_page_loaded)
-                    load_current_url();
+                    load_current_url(false);
             });
         }
         event.Skip();
@@ -247,7 +288,13 @@ private:
     void on_webview_error(wxWebViewEvent& event)
     {
         if (event.GetURL() != "about:blank") {
+            const std::string event_url = to_utf8(event.GetURL());
+            const std::string url = event_url.empty() ? m_current_url : event_url;
             m_page_loaded = false;
+            SPOOLEASE_LOG(warning) << "SpoolEase: web page load failed: url=" << redacted_web_page_url(url)
+                                   << " error_code=" << event.GetInt()
+                                   << " error=\"" << to_utf8(event.GetString()) << "\""
+                                   << " retry_in_ms=" << retry_interval_ms;
             show_status_page(StatusPage::NotAvailable);
             start_retry_timer();
         }
@@ -257,6 +304,8 @@ private:
     void on_webview_loaded(wxWebViewEvent& event)
     {
         if (!m_current_url.empty() && !event.GetURL().empty() && event.GetURL() != "about:blank") {
+            if (!m_page_loaded)
+                SPOOLEASE_LOG(info) << "SpoolEase: web page loaded: url=" << redacted_web_page_url(m_current_url);
             m_page_loaded = true;
             m_status_page.reset();
             m_retry_timer.Stop();
@@ -266,8 +315,10 @@ private:
 
     void on_retry_timer(wxTimerEvent&)
     {
-        if (!m_current_url.empty() && !m_page_loaded)
-            load_current_url();
+        if (!m_current_url.empty() && !m_page_loaded) {
+            SPOOLEASE_LOG(info) << "SpoolEase: web retry: url=" << redacted_web_page_url(m_current_url);
+            load_current_url(true);
+        }
     }
 
     void resize_webview()
@@ -280,14 +331,11 @@ private:
             return;
 
         m_webview->SetSize(size);
-        if (wxWebView* webview = m_webview->GetWebView())
-            webview->SetSize(m_webview->GetClientSize());
-        m_webview->Layout();
     }
 
     void load_configured_url(bool force)
     {
-        const std::string url = inventory_url();
+        const std::string url = web_page_url();
         if (url.empty()) {
             clear_page(StatusPage::NotConfigured);
             return;
@@ -296,22 +344,22 @@ private:
         if (!force && m_current_url == url && m_page_loaded)
             return;
 
+        SPOOLEASE_LOG(info) << "SpoolEase: web page URL prepared: url=" << redacted_web_page_url(url);
         m_current_url = url;
         m_page_loaded = false;
         show_status_page(StatusPage::NotAvailable);
-        load_current_url();
+        load_current_url(false);
     }
 
-    void load_current_url()
+    void load_current_url(bool)
     {
         if (!m_webview || m_current_url.empty())
             return;
 
         resize_webview();
-        if (wxWebView* webview = m_webview->GetWebView()) {
-            WebView::LoadUrl(webview, wxString::FromUTF8(m_current_url));
-            start_retry_timer();
-        }
+        SPOOLEASE_LOG(info) << "SpoolEase: web page loading: url=" << redacted_web_page_url(m_current_url);
+        m_webview->LoadURL(wxString::FromUTF8(m_current_url));
+        start_retry_timer();
     }
 
     void clear_page(StatusPage status)
@@ -324,12 +372,14 @@ private:
 
     void show_status_page(StatusPage status)
     {
+        const bool changed = !m_status_page.has_value() || *m_status_page != status;
         m_status_page = status;
+        if (changed)
+            SPOOLEASE_LOG(info) << "SpoolEase: web fallback shown: status=" << status_name(status);
 
         if (!m_webview)
             return;
-        if (wxWebView* webview = m_webview->GetWebView())
-            webview->SetPage(wxString::FromUTF8(render_status_page(status)), "about:blank");
+        m_webview->SetPage(wxString::FromUTF8(render_status_page(status)), "about:blank");
     }
 
     void start_retry_timer()
@@ -339,7 +389,7 @@ private:
     }
 
 private:
-    Slic3r::GUI::PrinterWebView* m_webview{nullptr}; // owned by wx parent
+    wxWebView*                   m_webview{nullptr}; // owned by wx parent
     wxTimer                      m_retry_timer;
     std::string                  m_current_url;
     std::optional<StatusPage>    m_status_page;

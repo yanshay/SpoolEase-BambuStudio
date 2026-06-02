@@ -4,6 +4,8 @@
 #include <optional>
 #include <string>
 
+#include <wx/event.h>
+
 namespace Slic3r { namespace SpoolEase {
 
 struct ConsoleConfig
@@ -13,6 +15,8 @@ struct ConsoleConfig
     std::string api_token;
     std::string ca_cert_pem;
 };
+
+wxDECLARE_EVENT(EVT_SPOOLEASE_CONFIG_CHANGED, wxCommandEvent);
 
 std::string config_file_path();
 std::optional<ConsoleConfig> console_config(bool warn);

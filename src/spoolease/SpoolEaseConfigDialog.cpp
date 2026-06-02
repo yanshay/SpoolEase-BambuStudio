@@ -308,7 +308,7 @@ private:
         status_row->Add(m_status, 1, wxEXPAND);
         page_sizer->Add(status_row, 0, wxEXPAND | wxTOP, FromDIP(8));
 
-        auto* api_note = make_label(page, _L("The API token and CA certificate can be obtained from the SpoolEase web application under Settings → API tab."), DESIGN_GRAY600_COLOR, Label::Body_13);
+        auto* api_note = make_label(page, _L("The API token and CA certificate can be obtained from the SpoolEase web application under Settings (Gear Icon) → API tab."), DESIGN_GRAY600_COLOR, Label::Body_13);
         api_note->Wrap(FromDIP(470));
         auto* api_note_row = new wxBoxSizer(wxHORIZONTAL);
         api_note_row->AddSpacer(FromDIP(23));

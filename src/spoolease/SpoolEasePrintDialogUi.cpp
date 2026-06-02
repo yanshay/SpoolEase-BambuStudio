@@ -164,7 +164,7 @@ CapacityStatus capacity_status(const ItemState& state, const SlotInventory& inve
     if (state.required_g.value() > inventory.weight_net.value())
         return CapacityStatus::Insufficient;
 
-    if (inventory.weight_net.value() - state.required_g.value() <= 10.f)
+    if (inventory.weight_net.value() - state.required_g.value() <= 20.f)
         return CapacityStatus::NearLimit;
 
     return CapacityStatus::Normal;

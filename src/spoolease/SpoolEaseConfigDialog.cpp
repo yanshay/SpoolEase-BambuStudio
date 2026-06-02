@@ -267,7 +267,7 @@ private:
 
         page_sizer->Add(make_section_title(page, _L("Console")), 0, wxEXPAND);
         add_config_path(page, page_sizer);
-        add_restart_note(page, page_sizer);
+        add_apply_note(page, page_sizer);
 
         m_address = create_text_input(page);
         m_security_key = create_text_input(page);
@@ -365,11 +365,11 @@ private:
         sizer->Add(row, 0, wxEXPAND | wxTOP, parent->FromDIP(10));
     }
 
-    void add_restart_note(wxWindow* parent, wxBoxSizer* sizer)
+    void add_apply_note(wxWindow* parent, wxBoxSizer* sizer)
     {
         auto* row = new wxBoxSizer(wxHORIZONTAL);
         row->AddSpacer(parent->FromDIP(23));
-        auto* note = make_label(parent, _L("These settings are applied after restarting Bambu Studio."), DESIGN_GRAY600_COLOR, Label::Body_13);
+        auto* note = make_label(parent, _L("These settings are applied automatically after saving."), DESIGN_GRAY600_COLOR, Label::Body_13);
         note->Wrap(parent->FromDIP(470));
         row->Add(note, 1, wxEXPAND | wxALL, parent->FromDIP(3));
         sizer->Add(row, 0, wxEXPAND | wxTOP, parent->FromDIP(4));
@@ -510,11 +510,11 @@ private:
         } else if (!m_load_error.empty()) {
             set_status(wxString::Format(_L("Failed to read existing config: %s"), wxString::FromUTF8(m_load_error)), true);
         } else if (m_erase_requested) {
-            set_status(_L("Click OK to erase config.json and disable SpoolEase integration after restart."), false);
+            set_status(_L("Click OK to erase config.json and disable SpoolEase integration."), false);
         } else if (all_fields_empty()) {
             set_status(_L("No SpoolEase config will be saved."), false);
         } else {
-            set_status(_L("Click OK to save. Changes are applied after restarting Bambu Studio."), false);
+            set_status(_L("Click OK to save. Changes are applied automatically."), false);
         }
     }
 

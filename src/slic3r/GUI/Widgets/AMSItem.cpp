@@ -1362,6 +1362,7 @@ void AMSLib::render_generic_text(wxDC &dc)
             dc.DrawText(str_line2, wxPoint((libsize.x - tsize_line2.x) / 2, y_text + tsize_line1.y));
             tooltip_text += "\n" + str_line1 + " " + str_line2;
         }
+        Slic3r::SpoolEase::update_device_slot_tooltip(*this, tooltip_text, m_info.material_name, m_obj ? m_obj->get_dev_id() : std::string(), m_ams_id, m_slot_id);
         if (GetToolTipText() != tooltip_text) {
             SetToolTip(tooltip_text);
         }

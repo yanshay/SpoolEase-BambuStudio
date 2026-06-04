@@ -1,6 +1,7 @@
 #include "SpoolEaseConfigDialog.hpp"
 
 #include "SpoolEaseConfig.hpp"
+#include "SpoolEaseCustomFilaments.hpp"
 #include "SpoolEaseLog.hpp"
 
 #include "slic3r/GUI/GUI_App.hpp"
@@ -667,6 +668,8 @@ wxMenu* create_config_menu(wxWindow& parent)
     auto* menu = new wxMenu();
     wxMenuItem* item = menu->Append(wxID_ANY, _L("Settings"), _L("Edit SpoolEase integration settings"));
     menu->Bind(wxEVT_MENU, [&parent](wxCommandEvent&) { show_config_dialog(parent); }, item->GetId());
+    wxMenuItem* sync_item = menu->Append(wxID_ANY, _L("Sync Custom Filaments"), _L("Submit custom filament settings to SpoolEase"));
+    menu->Bind(wxEVT_MENU, [&parent](wxCommandEvent&) { sync_custom_filaments(parent); }, sync_item->GetId());
     return menu;
 }
 

@@ -25,6 +25,8 @@
 
 namespace Slic3r { namespace SpoolEase {
 
+wxDEFINE_EVENT(EVT_SPOOLEASE_WEB_PAGE_RELOAD, wxCommandEvent);
+
 namespace {
 
 constexpr int retry_interval_ms = 5000;
@@ -240,8 +242,10 @@ public:
 
     ~SpoolEaseWebPage() override
     {
-        if (wxTheApp)
+        if (wxTheApp) {
             wxTheApp->Unbind(EVT_SPOOLEASE_CONFIG_CHANGED, &SpoolEaseWebPage::on_config_changed, this);
+            wxTheApp->Unbind(EVT_SPOOLEASE_WEB_PAGE_RELOAD, &SpoolEaseWebPage::on_reload_requested, this);
+        }
     }
 
 private:
@@ -253,6 +257,8 @@ private:
 
         if (wxTheApp)
             wxTheApp->Bind(EVT_SPOOLEASE_CONFIG_CHANGED, &SpoolEaseWebPage::on_config_changed, this);
+        if (wxTheApp)
+            wxTheApp->Bind(EVT_SPOOLEASE_WEB_PAGE_RELOAD, &SpoolEaseWebPage::on_reload_requested, this);
 
         if (m_webview) {
             m_webview->Bind(wxEVT_WEBVIEW_ERROR, &SpoolEaseWebPage::on_webview_error, this);
@@ -281,6 +287,11 @@ private:
     }
 
     void on_config_changed(wxCommandEvent&)
+    {
+        load_configured_url(true);
+    }
+
+    void on_reload_requested(wxCommandEvent&)
     {
         load_configured_url(true);
     }
@@ -401,6 +412,18 @@ private:
 wxWindow* create_web_page(wxWindow* parent)
 {
     return new SpoolEaseWebPage(parent);
+}
+
+void request_web_page_reload()
+{
+    if (!wxTheApp) {
+        SPOOLEASE_LOG(warning) << "SpoolEase: web page reload request failed: wxTheApp unavailable";
+        return;
+    }
+
+    wxCommandEvent event(EVT_SPOOLEASE_WEB_PAGE_RELOAD);
+    wxPostEvent(wxTheApp, event);
+    SPOOLEASE_LOG(info) << "SpoolEase: web page reload requested";
 }
 
 }} // namespace Slic3r::SpoolEase

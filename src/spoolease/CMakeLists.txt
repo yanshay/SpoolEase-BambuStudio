@@ -43,6 +43,8 @@ set(SLIC3R_GUI_SOURCES
     ${SLIC3R_GUI_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseConfigDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseConfigDialog.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseCustomFilaments.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseCustomFilaments.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseWebPage.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseWebPage.hpp
     PARENT_SCOPE

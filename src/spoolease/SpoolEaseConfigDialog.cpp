@@ -1,6 +1,7 @@
 #include "SpoolEaseConfigDialog.hpp"
 
 #include "SpoolEaseConfig.hpp"
+#include "SpoolEaseBackup.hpp"
 #include "SpoolEaseCustomFilaments.hpp"
 #include "SpoolEaseLog.hpp"
 
@@ -18,6 +19,7 @@
 #include <wx/clipbrd.h>
 #include <wx/checkbox.h>
 #include <wx/dataobj.h>
+#include <wx/dirdlg.h>
 #include <wx/filedlg.h>
 #include <wx/font.h>
 #include <wx/menu.h>
@@ -272,6 +274,7 @@ private:
 
         page_sizer->Add(make_section_title(page, _L("Bambu Studio")), 0, wxEXPAND);
         add_auto_sync_row(page, page_sizer);
+        add_backup_folder_row(page, page_sizer);
 
         page_sizer->Add(make_section_title(page, _L("Console")), 0, wxEXPAND | wxTOP, FromDIP(22));
         add_config_path(page, page_sizer);
@@ -416,6 +419,30 @@ private:
         sizer->Add(help_row, 0, wxEXPAND | wxTOP, parent->FromDIP(2));
     }
 
+    void add_backup_folder_row(wxWindow* parent, wxBoxSizer* sizer)
+    {
+        m_backup_folder = create_text_input(parent);
+
+        auto* row = new wxBoxSizer(wxHORIZONTAL);
+        row->AddSpacer(parent->FromDIP(23));
+
+        auto* title_label = make_label(parent, _L("Backup folder"));
+        title_label->SetMinSize(wxSize(parent->FromDIP(108), -1));
+        row->Add(title_label, 0, wxALIGN_CENTER_VERTICAL | wxALL, parent->FromDIP(3));
+        row->Add(m_backup_folder, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, parent->FromDIP(8));
+
+        m_backup_folder_browse = create_button(parent, _L("Browse..."), wxSize(parent->FromDIP(92), parent->FromDIP(26)), false);
+        row->Add(m_backup_folder_browse, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, parent->FromDIP(8));
+        sizer->Add(row, 0, wxEXPAND | wxTOP, parent->FromDIP(12));
+
+        auto* help_row = new wxBoxSizer(wxHORIZONTAL);
+        help_row->AddSpacer(parent->FromDIP(46));
+        auto* help = make_label(parent, _L("Optional default folder for local SpoolEase backups. If empty, each backup will ask where to save."), DESIGN_GRAY600_COLOR, Label::Body_13);
+        help->Wrap(parent->FromDIP(470));
+        help_row->Add(help, 1, wxEXPAND | wxALL, parent->FromDIP(3));
+        sizer->Add(help_row, 0, wxEXPAND | wxTOP, parent->FromDIP(2));
+    }
+
     void add_text_row(wxWindow* parent, wxBoxSizer* sizer, const wxString& title, TextInput* input)
     {
         auto* row = new wxBoxSizer(wxHORIZONTAL);
@@ -470,11 +497,13 @@ private:
         m_address->GetTextCtrl()->Bind(wxEVT_TEXT, mark_edited);
         m_security_key->GetTextCtrl()->Bind(wxEVT_TEXT, mark_edited);
         m_api_token->GetTextCtrl()->Bind(wxEVT_TEXT, mark_edited);
+        m_backup_folder->GetTextCtrl()->Bind(wxEVT_TEXT, mark_edited);
         m_ca_cert->Bind(wxEVT_TEXT, mark_edited);
         m_auto_sync_custom_filaments->Bind(wxEVT_CHECKBOX, mark_edited);
 
         m_paste_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { paste_certificate(); });
         m_load_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { load_certificate_file(); });
+        m_backup_folder_browse->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { choose_backup_folder(); });
         m_erase_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { mark_for_erase(); });
         m_ok_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { apply(); });
         m_cancel_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { EndModal(wxID_CANCEL); });
@@ -488,6 +517,7 @@ private:
             m_address->GetTextCtrl()->ChangeValue(wxString::FromUTF8(config->address));
             m_security_key->GetTextCtrl()->ChangeValue(wxString::FromUTF8(config->security_key));
             m_api_token->GetTextCtrl()->ChangeValue(wxString::FromUTF8(config->api_token));
+            m_backup_folder->GetTextCtrl()->ChangeValue(wxString::FromUTF8(config->backup_folder));
             m_ca_cert->ChangeValue(wxString::FromUTF8(normalize_pem_text(config->ca_cert_pem)));
             m_auto_sync_custom_filaments->SetValue(config->auto_sync_custom_filaments);
             m_provide_ca->SetValue(!config->ca_cert_pem.empty());
@@ -523,7 +553,7 @@ private:
 
     bool all_fields_empty() const
     {
-        return field_value(m_address).empty() && field_value(m_security_key).empty() && field_value(m_api_token).empty() && (!m_provide_ca->GetValue() || pem_value(m_ca_cert).empty());
+        return field_value(m_address).empty() && field_value(m_security_key).empty() && field_value(m_api_token).empty() && field_value(m_backup_folder).empty() && (!m_provide_ca->GetValue() || pem_value(m_ca_cert).empty());
     }
 
     wxString validation_error() const
@@ -612,6 +642,18 @@ private:
         update_validity();
     }
 
+    void choose_backup_folder()
+    {
+        wxDirDialog dialog(this, _L("Choose SpoolEase backup folder"), wxString::FromUTF8(field_value(m_backup_folder)), wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST | wxDD_NEW_DIR_BUTTON);
+        if (dialog.ShowModal() != wxID_OK)
+            return;
+
+        m_erase_requested = false;
+        m_load_error.clear();
+        m_backup_folder->GetTextCtrl()->SetValue(dialog.GetPath());
+        update_validity();
+    }
+
     void mark_for_erase()
     {
         m_erase_requested = true;
@@ -619,6 +661,7 @@ private:
         m_address->GetTextCtrl()->ChangeValue(wxEmptyString);
         m_security_key->GetTextCtrl()->ChangeValue(wxEmptyString);
         m_api_token->GetTextCtrl()->ChangeValue(wxEmptyString);
+        m_backup_folder->GetTextCtrl()->ChangeValue(wxEmptyString);
         m_ca_cert->ChangeValue(wxEmptyString);
         m_auto_sync_custom_filaments->SetValue(false);
         m_no_verify->SetValue(true);
@@ -650,6 +693,7 @@ private:
         config.address = field_value(m_address);
         config.security_key = field_value(m_security_key);
         config.api_token = field_value(m_api_token);
+        config.backup_folder = field_value(m_backup_folder);
         config.ca_cert_pem = m_provide_ca->GetValue() ? pem_value(m_ca_cert) : std::string();
         config.auto_sync_custom_filaments = m_auto_sync_custom_filaments->GetValue();
 
@@ -668,12 +712,14 @@ private:
     TextInput*                     m_address{nullptr};
     TextInput*                     m_security_key{nullptr};
     TextInput*                     m_api_token{nullptr};
+    TextInput*                     m_backup_folder{nullptr};
     wxCheckBox*                    m_auto_sync_custom_filaments{nullptr};
     Slic3r::GUI::RadioBox*         m_no_verify{nullptr};
     Slic3r::GUI::RadioBox*         m_provide_ca{nullptr};
     wxTextCtrl*                    m_ca_cert{nullptr};
     Button*                        m_paste_button{nullptr};
     Button*                        m_load_button{nullptr};
+    Button*                        m_backup_folder_browse{nullptr};
     wxStaticText*                  m_status{nullptr};
     Button*                        m_erase_button{nullptr};
     Button*                        m_cancel_button{nullptr};
@@ -696,6 +742,8 @@ wxMenu* create_config_menu(wxWindow& parent)
     auto* menu = new wxMenu();
     wxMenuItem* item = menu->Append(wxID_ANY, _L("Settings"), _L("Edit SpoolEase integration settings"));
     menu->Bind(wxEVT_MENU, [&parent](wxCommandEvent&) { show_config_dialog(parent); }, item->GetId());
+    wxMenuItem* backup_item = menu->Append(wxID_ANY, _L("Backup..."), _L("Save a SpoolEase backup to this computer"));
+    menu->Bind(wxEVT_MENU, [&parent](wxCommandEvent&) { backup_to_local_disk(parent); }, backup_item->GetId());
     wxMenuItem* sync_item = menu->Append(wxID_ANY, _L("Sync Custom Filaments"), _L("Submit custom filament settings to SpoolEase"));
     menu->Bind(wxEVT_MENU, [&parent](wxCommandEvent&) { sync_custom_filaments(parent); }, sync_item->GetId());
     return menu;

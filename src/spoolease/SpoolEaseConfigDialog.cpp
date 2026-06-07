@@ -16,6 +16,7 @@
 #include <boost/nowide/fstream.hpp>
 
 #include <wx/clipbrd.h>
+#include <wx/checkbox.h>
 #include <wx/dataobj.h>
 #include <wx/filedlg.h>
 #include <wx/font.h>
@@ -269,7 +270,10 @@ private:
         page->SetBackgroundColour(*wxWHITE);
         auto* page_sizer = new wxBoxSizer(wxVERTICAL);
 
-        page_sizer->Add(make_section_title(page, _L("Console")), 0, wxEXPAND);
+        page_sizer->Add(make_section_title(page, _L("Bambu Studio")), 0, wxEXPAND);
+        add_auto_sync_row(page, page_sizer);
+
+        page_sizer->Add(make_section_title(page, _L("Console")), 0, wxEXPAND | wxTOP, FromDIP(22));
         add_config_path(page, page_sizer);
         add_apply_note(page, page_sizer);
 
@@ -393,6 +397,25 @@ private:
         sizer->Add(row, 0, wxEXPAND | wxTOP, parent->FromDIP(4));
     }
 
+    void add_auto_sync_row(wxWindow* parent, wxBoxSizer* sizer)
+    {
+        auto* checkbox_row = new wxBoxSizer(wxHORIZONTAL);
+        checkbox_row->AddSpacer(parent->FromDIP(23));
+        m_auto_sync_custom_filaments = new wxCheckBox(parent, wxID_ANY, _L("Automatically sync custom filaments"));
+        m_auto_sync_custom_filaments->SetBackgroundColour(*wxWHITE);
+        m_auto_sync_custom_filaments->SetForegroundColour(DESIGN_GRAY900_COLOR);
+        m_auto_sync_custom_filaments->SetFont(Label::Body_13);
+        checkbox_row->Add(m_auto_sync_custom_filaments, 0, wxALIGN_CENTER_VERTICAL | wxALL, parent->FromDIP(3));
+        sizer->Add(checkbox_row, 0, wxEXPAND | wxTOP, parent->FromDIP(10));
+
+        auto* help_row = new wxBoxSizer(wxHORIZONTAL);
+        help_row->AddSpacer(parent->FromDIP(46));
+        auto* help = make_label(parent, _L("Syncs Bambu Studio custom filament settings to SpoolEase automatically. After changes, refreshes the SpoolEase page with updated filament information."), DESIGN_GRAY600_COLOR, Label::Body_13);
+        help->Wrap(parent->FromDIP(470));
+        help_row->Add(help, 1, wxEXPAND | wxALL, parent->FromDIP(3));
+        sizer->Add(help_row, 0, wxEXPAND | wxTOP, parent->FromDIP(2));
+    }
+
     void add_text_row(wxWindow* parent, wxBoxSizer* sizer, const wxString& title, TextInput* input)
     {
         auto* row = new wxBoxSizer(wxHORIZONTAL);
@@ -448,6 +471,7 @@ private:
         m_security_key->GetTextCtrl()->Bind(wxEVT_TEXT, mark_edited);
         m_api_token->GetTextCtrl()->Bind(wxEVT_TEXT, mark_edited);
         m_ca_cert->Bind(wxEVT_TEXT, mark_edited);
+        m_auto_sync_custom_filaments->Bind(wxEVT_CHECKBOX, mark_edited);
 
         m_paste_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { paste_certificate(); });
         m_load_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { load_certificate_file(); });
@@ -465,6 +489,7 @@ private:
             m_security_key->GetTextCtrl()->ChangeValue(wxString::FromUTF8(config->security_key));
             m_api_token->GetTextCtrl()->ChangeValue(wxString::FromUTF8(config->api_token));
             m_ca_cert->ChangeValue(wxString::FromUTF8(normalize_pem_text(config->ca_cert_pem)));
+            m_auto_sync_custom_filaments->SetValue(config->auto_sync_custom_filaments);
             m_provide_ca->SetValue(!config->ca_cert_pem.empty());
             m_no_verify->SetValue(config->ca_cert_pem.empty());
         } else {
@@ -595,6 +620,7 @@ private:
         m_security_key->GetTextCtrl()->ChangeValue(wxEmptyString);
         m_api_token->GetTextCtrl()->ChangeValue(wxEmptyString);
         m_ca_cert->ChangeValue(wxEmptyString);
+        m_auto_sync_custom_filaments->SetValue(false);
         m_no_verify->SetValue(true);
         m_provide_ca->SetValue(false);
         update_certificate_controls();
@@ -625,6 +651,7 @@ private:
         config.security_key = field_value(m_security_key);
         config.api_token = field_value(m_api_token);
         config.ca_cert_pem = m_provide_ca->GetValue() ? pem_value(m_ca_cert) : std::string();
+        config.auto_sync_custom_filaments = m_auto_sync_custom_filaments->GetValue();
 
         SPOOLEASE_LOG(info) << "SpoolEase: settings apply: action=save";
         if (!save_console_config(config, &io_error)) {
@@ -641,6 +668,7 @@ private:
     TextInput*                     m_address{nullptr};
     TextInput*                     m_security_key{nullptr};
     TextInput*                     m_api_token{nullptr};
+    wxCheckBox*                    m_auto_sync_custom_filaments{nullptr};
     Slic3r::GUI::RadioBox*         m_no_verify{nullptr};
     Slic3r::GUI::RadioBox*         m_provide_ca{nullptr};
     wxTextCtrl*                    m_ca_cert{nullptr};
@@ -677,6 +705,8 @@ wxMenu* create_config_menu(wxWindow& parent)
 
 void install_config_menu(wxWindow& parent, wxMenuBar* menubar, AddTopbarSubmenuFn add_topbar_submenu)
 {
+    start_custom_filament_auto_sync();
+
     wxMenu* menu = create_config_menu(parent);
     const wxString title = _L("SpoolEase");
 

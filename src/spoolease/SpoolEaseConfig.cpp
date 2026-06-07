@@ -181,7 +181,8 @@ ConfigReadResult read_console_config_file(bool validate_required)
             config_string(section, "address"),
             config_string(section, "security_key"),
             config_string(section, "api_token"),
-            config_string(section, "ca_cert_pem")
+            config_string(section, "ca_cert_pem"),
+            section.value("auto_sync_custom_filaments", false)
         };
 
         if (validate_required) {
@@ -342,7 +343,8 @@ bool save_console_config(const ConsoleConfig& console, std::string* error)
             {"address", console.address},
             {"security_key", console.security_key},
             {"api_token", console.api_token},
-            {"ca_cert_pem", console.ca_cert_pem}
+            {"ca_cert_pem", console.ca_cert_pem},
+            {"auto_sync_custom_filaments", console.auto_sync_custom_filaments}
         };
 
         boost::nowide::ofstream ofs(path);

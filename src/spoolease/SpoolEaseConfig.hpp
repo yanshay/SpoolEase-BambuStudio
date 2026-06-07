@@ -14,6 +14,7 @@ struct ConsoleConfig
     std::string security_key;
     std::string api_token;
     std::string ca_cert_pem;
+    bool        auto_sync_custom_filaments{false};
 };
 
 wxDECLARE_EVENT(EVT_SPOOLEASE_CONFIG_CHANGED, wxCommandEvent);

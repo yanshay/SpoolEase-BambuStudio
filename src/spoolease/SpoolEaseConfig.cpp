@@ -182,6 +182,7 @@ ConfigReadResult read_console_config_file(bool validate_required)
             config_string(section, "security_key"),
             config_string(section, "api_token"),
             config_string(section, "ca_cert_pem"),
+            config_string(section, "backup_folder"),
             section.value("auto_sync_custom_filaments", false)
         };
 
@@ -344,6 +345,7 @@ bool save_console_config(const ConsoleConfig& console, std::string* error)
             {"security_key", console.security_key},
             {"api_token", console.api_token},
             {"ca_cert_pem", console.ca_cert_pem},
+            {"backup_folder", console.backup_folder},
             {"auto_sync_custom_filaments", console.auto_sync_custom_filaments}
         };
 

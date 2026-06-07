@@ -14,6 +14,7 @@ struct ConsoleConfig
     std::string security_key;
     std::string api_token;
     std::string ca_cert_pem;
+    std::string backup_folder;
     bool        auto_sync_custom_filaments{false};
 };
 

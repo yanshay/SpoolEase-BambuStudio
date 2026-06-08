@@ -220,24 +220,15 @@ public:
     {
         SPOOLEASE_LOG(info) << "SpoolEase: web page created";
 
-        m_webview = wxWebView::New(this, wxID_ANY);
-        if (m_webview)
-            m_webview->SetMinSize(wxSize(FromDIP(320), FromDIP(260)));
-        else
-            SPOOLEASE_LOG(error) << "SpoolEase: web page wxWebView init failed";
+        SetMinSize(wxSize(FromDIP(320), FromDIP(260)));
 
         auto* sizer = new wxBoxSizer(wxVERTICAL);
-        if (m_webview)
-            sizer->Add(m_webview, 1, wxEXPAND);
         SetSizer(sizer);
 
         bind_events();
-        load_configured_url(true);
 
         Layout();
         sizer->Layout();
-        resize_webview();
-        Fit();
     }
 
     ~SpoolEaseWebPage() override
@@ -259,11 +250,31 @@ private:
             wxTheApp->Bind(EVT_SPOOLEASE_CONFIG_CHANGED, &SpoolEaseWebPage::on_config_changed, this);
         if (wxTheApp)
             wxTheApp->Bind(EVT_SPOOLEASE_WEB_PAGE_RELOAD, &SpoolEaseWebPage::on_reload_requested, this);
+    }
 
-        if (m_webview) {
-            m_webview->Bind(wxEVT_WEBVIEW_ERROR, &SpoolEaseWebPage::on_webview_error, this);
-            m_webview->Bind(wxEVT_WEBVIEW_LOADED, &SpoolEaseWebPage::on_webview_loaded, this);
+    bool ensure_webview_created()
+    {
+        if (m_webview)
+            return true;
+
+        m_webview = wxWebView::New(this, wxID_ANY);
+        if (!m_webview) {
+            SPOOLEASE_LOG(error) << "SpoolEase: web page wxWebView init failed";
+            return false;
         }
+
+        m_webview->SetMinSize(wxSize(FromDIP(320), FromDIP(260)));
+        m_webview->Bind(wxEVT_WEBVIEW_ERROR, &SpoolEaseWebPage::on_webview_error, this);
+        m_webview->Bind(wxEVT_WEBVIEW_LOADED, &SpoolEaseWebPage::on_webview_loaded, this);
+
+        if (wxSizer* sizer = GetSizer()) {
+            sizer->Add(m_webview, 1, wxEXPAND);
+            sizer->Layout();
+        }
+
+        Layout();
+        resize_webview();
+        return true;
     }
 
     void on_size(wxSizeEvent& event)
@@ -276,11 +287,23 @@ private:
     {
         if (event.IsShown()) {
             CallAfter([this]() {
+                if (!IsShownOnScreen())
+                    return;
+
+                const bool first_create = !m_webview;
+                if (!ensure_webview_created())
+                    return;
+
+                Layout();
                 resize_webview();
-                if (m_status_page.has_value())
-                    show_status_page(*m_status_page);
-                if (!m_current_url.empty() && !m_page_loaded)
-                    load_current_url(false);
+                if (first_create) {
+                    load_configured_url(true);
+                } else {
+                    if (m_status_page.has_value())
+                        show_status_page(*m_status_page);
+                    if (!m_current_url.empty() && !m_page_loaded)
+                        load_current_url(false);
+                }
             });
         }
         event.Skip();
@@ -288,11 +311,15 @@ private:
 
     void on_config_changed(wxCommandEvent&)
     {
+        if (!m_webview)
+            return;
         load_configured_url(true);
     }
 
     void on_reload_requested(wxCommandEvent&)
     {
+        if (!m_webview)
+            return;
         load_configured_url(true);
     }
 
@@ -346,6 +373,9 @@ private:
 
     void load_configured_url(bool force)
     {
+        if (!m_webview)
+            return;
+
         const std::string url = web_page_url();
         if (url.empty()) {
             clear_page(StatusPage::NotConfigured);
@@ -395,7 +425,7 @@ private:
 
     void start_retry_timer()
     {
-        if (!m_current_url.empty() && !m_page_loaded)
+        if (m_webview && !m_current_url.empty() && !m_page_loaded)
             m_retry_timer.Start(retry_interval_ms, wxTIMER_ONE_SHOT);
     }
 

@@ -26,15 +26,18 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <ctime>
 #include <iomanip>
+#include <limits>
 #include <mutex>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <thread>
 #include <utility>
+#include <vector>
 
 namespace Slic3r { namespace SpoolEase {
 
@@ -43,6 +46,13 @@ namespace fs = boost::filesystem;
 namespace {
 
 std::once_flag s_curl_init_once;
+std::atomic_bool s_backup_operation_in_progress{false};
+
+constexpr const char* automatic_backup_prefix = "SpoolEase-AutoBackup-";
+constexpr const char* backup_extension = ".txt";
+constexpr int automatic_backup_startup_delay_ms = 2 * 60 * 1000;
+constexpr int automatic_backup_retry_delay_ms = 60 * 60 * 1000;
+constexpr int automatic_backup_busy_retry_delay_ms = 10 * 60 * 1000;
 
 struct DownloadResult
 {
@@ -61,6 +71,19 @@ struct PostResult
     std::string response;
 };
 
+struct AutoBackupResult
+{
+    bool        ok{false};
+    std::string error;
+    std::string path;
+};
+
+struct AutomaticBackupFile
+{
+    std::string name;
+    fs::path    path;
+};
+
 struct CurlTransferState
 {
     std::atomic_bool* cancel{nullptr};
@@ -70,6 +93,36 @@ std::string to_utf8(const wxString& text)
 {
     const wxScopedCharBuffer buffer = text.ToUTF8();
     return buffer.data() ? std::string(buffer.data()) : std::string();
+}
+
+bool try_begin_backup_operation()
+{
+    bool expected = false;
+    return s_backup_operation_in_progress.compare_exchange_strong(expected, true);
+}
+
+void end_backup_operation()
+{
+    s_backup_operation_in_progress.store(false);
+}
+
+std::tm local_time(std::time_t value)
+{
+    std::tm local{};
+#ifdef _WIN32
+    localtime_s(&local, &value);
+#else
+    localtime_r(&value, &local);
+#endif
+    return local;
+}
+
+std::string format_local_time(std::time_t value, const char* format)
+{
+    std::tm local = local_time(value);
+    std::ostringstream out;
+    out << std::put_time(&local, format);
+    return out.str();
 }
 
 std::string internal_api_url(const ConsoleConfig& config, const char* path)
@@ -270,16 +323,17 @@ bool is_existing_directory(const std::string& path)
 std::string default_backup_filename()
 {
     const std::time_t now = std::time(nullptr);
-    std::tm local_time{};
-#ifdef _WIN32
-    localtime_s(&local_time, &now);
-#else
-    localtime_r(&now, &local_time);
-#endif
+    return "SpoolEase-Backup-" + format_local_time(now, "%Y%m%d-%H%M%S") + backup_extension;
+}
 
-    std::ostringstream out;
-    out << "SpoolEase-Backup-" << std::put_time(&local_time, "%Y%m%d-%H%M%S") << ".txt";
-    return out.str();
+std::string automatic_backup_filename(std::time_t value)
+{
+    return std::string(automatic_backup_prefix) + format_local_time(value, "%Y%m%d-%H%M%S") + backup_extension;
+}
+
+std::string local_date_stamp(std::time_t value)
+{
+    return format_local_time(value, "%Y%m%d");
 }
 
 std::string join_path(const std::string& folder, const std::string& filename)
@@ -287,8 +341,158 @@ std::string join_path(const std::string& folder, const std::string& filename)
     return (fs::path(folder) / filename).string();
 }
 
+void remove_file_silent(const std::string& path)
+{
+    boost::system::error_code ec;
+    fs::remove(path, ec);
+}
+
+bool all_digits(const std::string& text, size_t pos, size_t count)
+{
+    if (pos + count > text.size())
+        return false;
+    for (size_t i = pos; i < pos + count; ++i) {
+        if (!std::isdigit(static_cast<unsigned char>(text[i])))
+            return false;
+    }
+    return true;
+}
+
+bool is_automatic_backup_filename(const std::string& name)
+{
+    const std::string prefix(automatic_backup_prefix);
+    const std::string extension(backup_extension);
+    const size_t expected_size = prefix.size() + 8 + 1 + 6 + extension.size();
+    return name.size() == expected_size
+        && name.compare(0, prefix.size(), prefix) == 0
+        && name[prefix.size() + 8] == '-'
+        && name.compare(name.size() - extension.size(), extension.size(), extension) == 0
+        && all_digits(name, prefix.size(), 8)
+        && all_digits(name, prefix.size() + 9, 6);
+}
+
+std::string automatic_backup_date_from_filename(const std::string& name)
+{
+    return name.substr(std::string(automatic_backup_prefix).size(), 8);
+}
+
+bool non_empty_regular_file(const fs::path& path)
+{
+    boost::system::error_code ec;
+    if (!fs::is_regular_file(path, ec) || ec)
+        return false;
+    const auto size = fs::file_size(path, ec);
+    return !ec && size > 0;
+}
+
+bool automatic_backup_exists_for_date(const std::string& folder, const std::string& date_stamp)
+{
+    if (!is_existing_directory(folder))
+        return false;
+
+    try {
+        for (fs::directory_iterator it(folder), end; it != end; ++it) {
+            const fs::path path = it->path();
+            const std::string name = path.filename().string();
+            if (is_automatic_backup_filename(name)
+                && automatic_backup_date_from_filename(name) == date_stamp
+                && non_empty_regular_file(path))
+                return true;
+        }
+    } catch (const std::exception& e) {
+        SPOOLEASE_LOG(warning) << "SpoolEase: automatic backup scan failed: folder=" << folder
+                               << " error=\"" << e.what() << "\"";
+    }
+
+    return false;
+}
+
+void prune_automatic_backups(const std::string& folder, int keep_count)
+{
+    keep_count = std::max(1, keep_count);
+    if (!is_existing_directory(folder))
+        return;
+
+    std::vector<AutomaticBackupFile> files;
+
+    try {
+        for (fs::directory_iterator it(folder), end; it != end; ++it) {
+            const fs::path path = it->path();
+            const std::string name = path.filename().string();
+            if (!is_automatic_backup_filename(name))
+                continue;
+
+            boost::system::error_code ec;
+            if (!fs::is_regular_file(path, ec) || ec)
+                continue;
+
+            const auto size = fs::file_size(path, ec);
+            if (ec)
+                continue;
+
+            if (size == 0) {
+                fs::remove(path, ec);
+                if (ec) {
+                    SPOOLEASE_LOG(warning) << "SpoolEase: empty automatic backup cleanup failed: path=" << path.string()
+                                           << " error=\"" << ec.message() << "\"";
+                }
+                continue;
+            }
+
+            files.push_back(AutomaticBackupFile{name, path});
+        }
+    } catch (const std::exception& e) {
+        SPOOLEASE_LOG(warning) << "SpoolEase: automatic backup retention scan failed: folder=" << folder
+                               << " error=\"" << e.what() << "\"";
+        return;
+    }
+
+    std::sort(files.begin(), files.end(), [](const AutomaticBackupFile& lhs, const AutomaticBackupFile& rhs) {
+        return lhs.name < rhs.name;
+    });
+
+    while (files.size() > static_cast<size_t>(keep_count)) {
+        boost::system::error_code ec;
+        fs::remove(files.front().path, ec);
+        if (ec) {
+            SPOOLEASE_LOG(warning) << "SpoolEase: automatic backup retention delete failed: path=" << files.front().path.string()
+                                   << " error=\"" << ec.message() << "\"";
+            break;
+        }
+        SPOOLEASE_LOG(info) << "SpoolEase: automatic backup retention deleted: path=" << files.front().path.string();
+        files.erase(files.begin());
+    }
+}
+
+int milliseconds_from_seconds(long long seconds)
+{
+    const long long milliseconds = std::max(1LL, seconds) * 1000LL;
+    return static_cast<int>(std::min<long long>(milliseconds, std::numeric_limits<int>::max()));
+}
+
+int milliseconds_until_next_daily_check()
+{
+    const std::time_t now = std::time(nullptr);
+    std::tm next = local_time(now);
+    next.tm_hour = 0;
+    next.tm_min = 0;
+    next.tm_sec = 0;
+    next.tm_mday += 1;
+
+    const std::time_t next_midnight = std::mktime(&next);
+    long long seconds = 60;
+    if (next_midnight != static_cast<std::time_t>(-1))
+        seconds = static_cast<long long>(std::difftime(next_midnight, now)) + 120;
+    return milliseconds_from_seconds(std::max(60LL, seconds));
+}
+
 bool write_backup_file(const std::string& path, const std::string& data, std::string& error)
 {
+    if (data.empty()) {
+        error = "SpoolEase returned an empty backup.";
+        return false;
+    }
+
     boost::nowide::ofstream out(path, std::ios::out | std::ios::binary | std::ios::trunc);
     if (!out) {
         error = "Failed to open backup file for writing.";
@@ -299,10 +503,56 @@ bool write_backup_file(const std::string& path, const std::string& data, std::st
     out.close();
     if (!out) {
         error = "Failed to write backup file.";
+        remove_file_silent(path);
         return false;
     }
 
     return true;
+}
+
+AutoBackupResult run_automatic_backup(ConsoleConfig config)
+{
+    AutoBackupResult result;
+
+    if (!is_existing_directory(config.backup_folder)) {
+        result.error = "Automatic backup folder is not configured or does not exist.";
+        return result;
+    }
+
+    std::atomic_bool cancel{false};
+    DownloadResult download = download_backup_to_memory(config, cancel);
+    if (!download.ok) {
+        result.error = download.error.empty() ? "Backup download failed." : download.error;
+        return result;
+    }
+
+    if (download.data.empty()) {
+        result.error = "SpoolEase returned an empty backup.";
+        SPOOLEASE_LOG(warning) << "SpoolEase: automatic backup rejected empty response";
+        return result;
+    }
+
+    const std::string save_path = join_path(config.backup_folder, automatic_backup_filename(std::time(nullptr)));
+    std::string save_error;
+    if (!write_backup_file(save_path, download.data, save_error)) {
+        result.error = save_error;
+        remove_file_silent(save_path);
+        return result;
+    }
+
+    const PostResult mark_result = mark_backup_completed(config, std::time(nullptr));
+    if (!mark_result.ok) {
+        SPOOLEASE_LOG(warning) << "SpoolEase: automatic backup saved but completion mark failed: path=" << save_path
+                               << " error=\"" << mark_result.error << "\"";
+    }
+
+    prune_automatic_backups(config.backup_folder, config.auto_backup_keep_count);
+
+    result.ok = true;
+    result.path = save_path;
+    SPOOLEASE_LOG(info) << "SpoolEase: automatic backup saved: path=" << save_path
+                        << " bytes=" << download.data.size();
+    return result;
 }
 
 wxString elapsed_label(std::chrono::steady_clock::duration elapsed)
@@ -341,6 +591,10 @@ public:
         m_cancel.store(true);
         if (m_worker.joinable())
             m_worker.join();
+        if (m_backup_operation_active) {
+            end_backup_operation();
+            m_backup_operation_active = false;
+        }
     }
 
 private:
@@ -421,6 +675,12 @@ private:
         if (m_worker.joinable())
             m_worker.join();
 
+        if (!try_begin_backup_operation()) {
+            set_status(_L("Another SpoolEase backup is already running."), true);
+            return;
+        }
+        m_backup_operation_active = true;
+
         m_running = true;
         m_cancel.store(false);
         m_started = std::chrono::steady_clock::now();
@@ -454,6 +714,11 @@ private:
 
         if (!result.ok) {
             finish(_L("Backup failed."), true, false, wxString::Format(_L("Failed to back up SpoolEase:\n\n%s"), wxString::FromUTF8(result.error)));
+            return;
+        }
+
+        if (result.data.empty()) {
+            finish(_L("Backup failed."), true, false, _L("SpoolEase returned an empty backup. No backup file was saved."));
             return;
         }
 
@@ -504,6 +769,10 @@ private:
 
     void finish(const wxString& message, bool error, bool saved, const wxString& details = wxString())
     {
+        if (m_backup_operation_active) {
+            end_backup_operation();
+            m_backup_operation_active = false;
+        }
         m_running = false;
         set_status(message, error);
         if (!details.empty())
@@ -569,7 +838,115 @@ private:
     std::thread    m_worker;
     std::atomic_bool m_cancel{false};
     bool          m_running{false};
+    bool          m_backup_operation_active{false};
     std::chrono::steady_clock::time_point m_started;
+};
+
+class AutomaticBackupScheduler : public wxEvtHandler
+{
+public:
+    AutomaticBackupScheduler()
+        : m_timer(this)
+    {
+        Bind(wxEVT_TIMER, &AutomaticBackupScheduler::on_timer, this);
+    }
+
+    void start()
+    {
+        if (m_started)
+            return;
+
+        m_started = true;
+        if (wxTheApp)
+            wxTheApp->Bind(EVT_SPOOLEASE_CONFIG_CHANGED, &AutomaticBackupScheduler::on_config_changed, this);
+        schedule_after(automatic_backup_startup_delay_ms);
+        SPOOLEASE_LOG(info) << "SpoolEase: automatic backup scheduler started";
+    }
+
+private:
+    void on_config_changed(wxCommandEvent&)
+    {
+        if (!m_in_flight)
+            schedule_after(automatic_backup_startup_delay_ms);
+    }
+
+    void on_timer(wxTimerEvent&)
+    {
+        poll();
+    }
+
+    void schedule_after(int milliseconds)
+    {
+        m_timer.Start(std::max(1000, milliseconds), wxTIMER_ONE_SHOT);
+    }
+
+    void schedule_next_daily_check()
+    {
+        schedule_after(milliseconds_until_next_daily_check());
+    }
+
+    void poll()
+    {
+        if (m_in_flight)
+            return;
+
+        const std::optional<ConsoleConfig> config = console_config(false, "automatic_backup");
+        if (!config.has_value() || !config->auto_backup_enabled) {
+            schedule_after(automatic_backup_retry_delay_ms);
+            return;
+        }
+
+        if (!is_existing_directory(config->backup_folder)) {
+            SPOOLEASE_LOG(warning) << "SpoolEase: automatic backup skipped: backup folder missing or invalid: folder=" << config->backup_folder;
+            schedule_after(automatic_backup_retry_delay_ms);
+            return;
+        }
+
+        const std::string today = local_date_stamp(std::time(nullptr));
+        if (automatic_backup_exists_for_date(config->backup_folder, today)) {
+            schedule_next_daily_check();
+            return;
+        }
+
+        start_worker(*config);
+    }
+
+    void start_worker(ConsoleConfig config)
+    {
+        if (!try_begin_backup_operation()) {
+            schedule_after(automatic_backup_busy_retry_delay_ms);
+            return;
+        }
+
+        m_in_flight = true;
+        std::thread([this, config = std::move(config)]() mutable {
+            AutoBackupResult result = run_automatic_backup(std::move(config));
+            end_backup_operation();
+
+            if (wxTheApp) {
+                wxTheApp->CallAfter([this, result = std::move(result)]() mutable {
+                    on_worker_finished(std::move(result));
+                });
+            }
+        }).detach();
+    }
+
+    void on_worker_finished(AutoBackupResult result)
+    {
+        m_in_flight = false;
+        if (result.ok) {
+            schedule_next_daily_check();
+            return;
+        }
+
+        SPOOLEASE_LOG(warning) << "SpoolEase: automatic backup failed: error=\"" << result.error << "\"";
+        schedule_after(automatic_backup_retry_delay_ms);
+    }
+
+private:
+    wxTimer m_timer;
+    bool    m_started{false};
+    bool    m_in_flight{false};
 };
 
 } // namespace
@@ -582,6 +959,12 @@ void backup_to_local_disk(wxWindow& parent)
 
     BackupDialog dialog(&parent, *config);
     dialog.ShowModal();
+}
+
+void start_automatic_backup_scheduler()
+{
+    static AutomaticBackupScheduler scheduler;
+    scheduler.start();
 }
 
 }} // namespace Slic3r::SpoolEase

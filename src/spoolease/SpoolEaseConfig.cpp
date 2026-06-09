@@ -183,7 +183,9 @@ ConfigReadResult read_console_config_file(bool validate_required)
             config_string(section, "api_token"),
             config_string(section, "ca_cert_pem"),
             config_string(section, "backup_folder"),
-            section.value("auto_sync_custom_filaments", false)
+            section.value("auto_sync_custom_filaments", false),
+            section.value("auto_backup_enabled", false),
+            std::max(1, section.value("auto_backup_keep_count", 7))
         };
 
         if (validate_required) {
@@ -346,7 +348,9 @@ bool save_console_config(const ConsoleConfig& console, std::string* error)
             {"api_token", console.api_token},
             {"ca_cert_pem", console.ca_cert_pem},
             {"backup_folder", console.backup_folder},
-            {"auto_sync_custom_filaments", console.auto_sync_custom_filaments}
+            {"auto_sync_custom_filaments", console.auto_sync_custom_filaments},
+            {"auto_backup_enabled", console.auto_backup_enabled},
+            {"auto_backup_keep_count", std::max(1, console.auto_backup_keep_count)}
         };
 
         boost::nowide::ofstream ofs(path);

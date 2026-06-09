@@ -16,6 +16,8 @@ struct ConsoleConfig
     std::string ca_cert_pem;
     std::string backup_folder;
     bool        auto_sync_custom_filaments{false};
+    bool        auto_backup_enabled{false};
+    int         auto_backup_keep_count{7};
 };
 
 wxDECLARE_EVENT(EVT_SPOOLEASE_CONFIG_CHANGED, wxCommandEvent);

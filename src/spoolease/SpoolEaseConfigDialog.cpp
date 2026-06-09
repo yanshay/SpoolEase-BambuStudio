@@ -26,6 +26,7 @@
 #include <wx/panel.h>
 #include <wx/scrolwin.h>
 #include <wx/sizer.h>
+#include <wx/spinctrl.h>
 #include <wx/stattext.h>
 #include <wx/textctrl.h>
 
@@ -47,6 +48,7 @@ const wxColour DESIGN_GRAY300_COLOR("#EEEEEE");
 const wxColour DESIGN_GRAY200_COLOR("#F8F8F8");
 const wxColour DESIGN_GREEN_COLOR("#00AE42");
 const wxColour DESIGN_RED_COLOR("#D01B1B");
+constexpr int SETTINGS_HELP_WRAP_WIDTH = 520;
 
 class SpoolEaseScrolledWindow : public wxScrolledWindow
 {
@@ -275,6 +277,7 @@ private:
         page_sizer->Add(make_section_title(page, _L("Bambu Studio")), 0, wxEXPAND);
         add_auto_sync_row(page, page_sizer);
         add_backup_folder_row(page, page_sizer);
+        add_auto_backup_row(page, page_sizer);
 
         page_sizer->Add(make_section_title(page, _L("Console")), 0, wxEXPAND | wxTOP, FromDIP(22));
         add_config_path(page, page_sizer);
@@ -414,7 +417,7 @@ private:
         auto* help_row = new wxBoxSizer(wxHORIZONTAL);
         help_row->AddSpacer(parent->FromDIP(46));
         auto* help = make_label(parent, _L("Syncs Bambu Studio custom filament settings to SpoolEase automatically. After changes, refreshes the SpoolEase page with updated filament information."), DESIGN_GRAY600_COLOR, Label::Body_13);
-        help->Wrap(parent->FromDIP(470));
+        help->Wrap(parent->FromDIP(SETTINGS_HELP_WRAP_WIDTH));
         help_row->Add(help, 1, wxEXPAND | wxALL, parent->FromDIP(3));
         sizer->Add(help_row, 0, wxEXPAND | wxTOP, parent->FromDIP(2));
     }
@@ -438,9 +441,39 @@ private:
         auto* help_row = new wxBoxSizer(wxHORIZONTAL);
         help_row->AddSpacer(parent->FromDIP(46));
         auto* help = make_label(parent, _L("Optional default folder for local SpoolEase backups. If empty, each backup will ask where to save."), DESIGN_GRAY600_COLOR, Label::Body_13);
-        help->Wrap(parent->FromDIP(470));
+        help->Wrap(parent->FromDIP(SETTINGS_HELP_WRAP_WIDTH));
         help_row->Add(help, 1, wxEXPAND | wxALL, parent->FromDIP(3));
         sizer->Add(help_row, 0, wxEXPAND | wxTOP, parent->FromDIP(2));
+    }
+
+    void add_auto_backup_row(wxWindow* parent, wxBoxSizer* sizer)
+    {
+        auto* checkbox_row = new wxBoxSizer(wxHORIZONTAL);
+        checkbox_row->AddSpacer(parent->FromDIP(23));
+        m_auto_backup_enabled = new wxCheckBox(parent, wxID_ANY, _L("Automatically back up SpoolEase store"));
+        m_auto_backup_enabled->SetBackgroundColour(*wxWHITE);
+        m_auto_backup_enabled->SetForegroundColour(DESIGN_GRAY900_COLOR);
+        m_auto_backup_enabled->SetFont(Label::Body_13);
+        checkbox_row->Add(m_auto_backup_enabled, 0, wxALIGN_CENTER_VERTICAL | wxALL, parent->FromDIP(3));
+        sizer->Add(checkbox_row, 0, wxEXPAND | wxTOP, parent->FromDIP(12));
+
+        auto* help_row = new wxBoxSizer(wxHORIZONTAL);
+        help_row->AddSpacer(parent->FromDIP(46));
+        auto* help = make_label(parent, _L("Runs daily store backup. Requires Backup folder to be filled in."), DESIGN_GRAY600_COLOR, Label::Body_13);
+        help->Wrap(parent->FromDIP(SETTINGS_HELP_WRAP_WIDTH));
+        help_row->Add(help, 1, wxEXPAND | wxALL, parent->FromDIP(3));
+        sizer->Add(help_row, 0, wxEXPAND | wxTOP, parent->FromDIP(2));
+
+        auto* keep_row = new wxBoxSizer(wxHORIZONTAL);
+        keep_row->AddSpacer(parent->FromDIP(46));
+        m_auto_backup_keep_count_label = make_label(parent, _L("Keep automatic backups"));
+        m_auto_backup_keep_count_label->SetMinSize(wxSize(parent->FromDIP(158), -1));
+        keep_row->Add(m_auto_backup_keep_count_label, 0, wxALIGN_CENTER_VERTICAL | wxALL, parent->FromDIP(3));
+        m_auto_backup_keep_count = new wxSpinCtrl(parent, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(parent->FromDIP(72), -1), wxSP_ARROW_KEYS, 1, 999, 7);
+        m_auto_backup_keep_count->SetFont(Label::Body_13);
+        keep_row->Add(m_auto_backup_keep_count, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, parent->FromDIP(8));
+        keep_row->Add(make_label(parent, _L("files")), 0, wxALIGN_CENTER_VERTICAL | wxALL, parent->FromDIP(3));
+        sizer->Add(keep_row, 0, wxEXPAND);
     }
 
     void add_text_row(wxWindow* parent, wxBoxSizer* sizer, const wxString& title, TextInput* input)
@@ -500,6 +533,17 @@ private:
         m_backup_folder->GetTextCtrl()->Bind(wxEVT_TEXT, mark_edited);
         m_ca_cert->Bind(wxEVT_TEXT, mark_edited);
         m_auto_sync_custom_filaments->Bind(wxEVT_CHECKBOX, mark_edited);
+        m_auto_backup_enabled->Bind(wxEVT_CHECKBOX, [this, mark_edited](wxCommandEvent& event) {
+            update_auto_backup_controls();
+            mark_edited(event);
+        });
+        m_auto_backup_keep_count->Bind(wxEVT_SPINCTRL, [this](wxSpinEvent& event) {
+            m_erase_requested = false;
+            m_load_error.clear();
+            update_validity();
+            event.Skip();
+        });
+        m_auto_backup_keep_count->Bind(wxEVT_TEXT, mark_edited);
 
         m_paste_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { paste_certificate(); });
         m_load_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { load_certificate_file(); });
@@ -520,14 +564,18 @@ private:
             m_backup_folder->GetTextCtrl()->ChangeValue(wxString::FromUTF8(config->backup_folder));
             m_ca_cert->ChangeValue(wxString::FromUTF8(normalize_pem_text(config->ca_cert_pem)));
             m_auto_sync_custom_filaments->SetValue(config->auto_sync_custom_filaments);
+            m_auto_backup_enabled->SetValue(config->auto_backup_enabled);
+            m_auto_backup_keep_count->SetValue(std::max(1, config->auto_backup_keep_count));
             m_provide_ca->SetValue(!config->ca_cert_pem.empty());
             m_no_verify->SetValue(config->ca_cert_pem.empty());
         } else {
+            m_auto_backup_keep_count->SetValue(7);
             m_no_verify->SetValue(true);
             m_provide_ca->SetValue(false);
         }
 
         m_load_error = error;
+        update_auto_backup_controls();
     }
 
     void select_certificate_mode(bool provide_ca)
@@ -553,7 +601,13 @@ private:
 
     bool all_fields_empty() const
     {
-        return field_value(m_address).empty() && field_value(m_security_key).empty() && field_value(m_api_token).empty() && field_value(m_backup_folder).empty() && (!m_provide_ca->GetValue() || pem_value(m_ca_cert).empty());
+        return field_value(m_address).empty()
+            && field_value(m_security_key).empty()
+            && field_value(m_api_token).empty()
+            && field_value(m_backup_folder).empty()
+            && (!m_provide_ca->GetValue() || pem_value(m_ca_cert).empty())
+            && !m_auto_sync_custom_filaments->GetValue()
+            && !m_auto_backup_enabled->GetValue();
     }
 
     wxString validation_error() const
@@ -569,8 +623,19 @@ private:
             return _L("API token is required.");
         if (m_provide_ca->GetValue() && pem_value(m_ca_cert).empty())
             return _L("CA certificate is required when certificate verification is enabled.");
+        if (m_auto_backup_enabled->GetValue() && field_value(m_backup_folder).empty())
+            return _L("Backup folder is required when automatic backups are enabled.");
 
         return wxEmptyString;
+    }
+
+    void update_auto_backup_controls()
+    {
+        const bool enabled = m_auto_backup_enabled && m_auto_backup_enabled->GetValue();
+        if (m_auto_backup_keep_count)
+            m_auto_backup_keep_count->Enable(enabled);
+        if (m_auto_backup_keep_count_label)
+            m_auto_backup_keep_count_label->SetForegroundColour(themed(enabled ? DESIGN_GRAY900_COLOR : DESIGN_GRAY600_COLOR));
     }
 
     void update_validity()
@@ -664,9 +729,12 @@ private:
         m_backup_folder->GetTextCtrl()->ChangeValue(wxEmptyString);
         m_ca_cert->ChangeValue(wxEmptyString);
         m_auto_sync_custom_filaments->SetValue(false);
+        m_auto_backup_enabled->SetValue(false);
+        m_auto_backup_keep_count->SetValue(7);
         m_no_verify->SetValue(true);
         m_provide_ca->SetValue(false);
         update_certificate_controls();
+        update_auto_backup_controls();
         update_validity();
     }
 
@@ -696,6 +764,8 @@ private:
         config.backup_folder = field_value(m_backup_folder);
         config.ca_cert_pem = m_provide_ca->GetValue() ? pem_value(m_ca_cert) : std::string();
         config.auto_sync_custom_filaments = m_auto_sync_custom_filaments->GetValue();
+        config.auto_backup_enabled = m_auto_backup_enabled->GetValue();
+        config.auto_backup_keep_count = std::max(1, m_auto_backup_keep_count->GetValue());
 
         SPOOLEASE_LOG(info) << "SpoolEase: settings apply: action=save";
         if (!save_console_config(config, &io_error)) {
@@ -714,6 +784,9 @@ private:
     TextInput*                     m_api_token{nullptr};
     TextInput*                     m_backup_folder{nullptr};
     wxCheckBox*                    m_auto_sync_custom_filaments{nullptr};
+    wxCheckBox*                    m_auto_backup_enabled{nullptr};
+    wxSpinCtrl*                    m_auto_backup_keep_count{nullptr};
+    wxStaticText*                  m_auto_backup_keep_count_label{nullptr};
     Slic3r::GUI::RadioBox*         m_no_verify{nullptr};
     Slic3r::GUI::RadioBox*         m_provide_ca{nullptr};
     wxTextCtrl*                    m_ca_cert{nullptr};
@@ -754,6 +827,7 @@ wxMenu* create_config_menu(wxWindow& parent)
 void install_config_menu(wxWindow& parent, wxMenuBar* menubar, AddTopbarSubmenuFn add_topbar_submenu)
 {
     start_custom_filament_auto_sync();
+    start_automatic_backup_scheduler();
 
     wxMenu* menu = create_config_menu(parent);
     const wxString title = _L("SpoolEase");

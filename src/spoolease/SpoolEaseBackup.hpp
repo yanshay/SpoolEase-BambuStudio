@@ -6,6 +6,7 @@
 namespace Slic3r { namespace SpoolEase {
 
 void backup_to_local_disk(wxWindow& parent);
+void start_automatic_backup_scheduler();
 
 }} // namespace Slic3r::SpoolEase
 

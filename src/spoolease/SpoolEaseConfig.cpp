@@ -2,6 +2,7 @@
 
 #include "SpoolEaseInventory.hpp"
 #include "SpoolEaseLog.hpp"
+#include "SpoolEaseStatus.hpp"
 
 #include <boost/filesystem.hpp>
 #include <boost/nowide/fstream.hpp>
@@ -61,9 +62,27 @@ const char* bool_text(bool value)
     return value ? "true" : "false";
 }
 
+void update_config_status(const ConfigReadResult& result)
+{
+    if (result.status == "loaded") {
+        clear_live_status("config");
+        return;
+    }
+
+    if (result.status == "not_found") {
+        set_live_status_warning("config", "Not configured. Open Settings.");
+        return;
+    }
+
+    std::string message = result.warning_message.empty() ? result.reason : result.warning_message;
+    if (message.empty())
+        message = "Config is invalid.";
+    set_live_status_error("config", message);
+}
+
 void show_config_warning(const std::string& message)
 {
-    wxMessageBox(wxString::FromUTF8(message), wxString::FromUTF8("SpoolEase configuration"), wxOK | wxICON_WARNING);
+    wxMessageBox(wxString::FromUTF8(message), wxString::FromUTF8("SpoolEase config"), wxOK | wxICON_WARNING);
 }
 
 void notify_config_changed()
@@ -149,8 +168,8 @@ ConfigReadResult read_console_config_file(bool validate_required)
     try {
         if (result.path.empty()) {
             result.status = "read_failed";
-            result.reason = "configuration path is empty";
-            result.warning_message = "Failed to read SpoolEase configuration file.";
+            result.reason = "config path is empty";
+            result.warning_message = "Failed to read config file.";
             return result;
         }
 
@@ -162,8 +181,8 @@ ConfigReadResult read_console_config_file(bool validate_required)
         boost::nowide::ifstream ifs(result.path);
         if (!ifs) {
             result.status = "read_failed";
-            result.reason = "failed to open configuration file";
-            result.warning_message = "Failed to read SpoolEase configuration file:\n" + result.path;
+            result.reason = "failed to open config file";
+            result.warning_message = "Failed to read config file:\n" + result.path;
             return result;
         }
 
@@ -171,11 +190,11 @@ ConfigReadResult read_console_config_file(bool validate_required)
         ifs >> config;
 
         if (!config.is_object())
-            return invalid_result(result.path, "configuration file is not a JSON object", "SpoolEase configuration file is not a JSON object:\n" + result.path);
+            return invalid_result(result.path, "config file is not a JSON object", "Config file is not a JSON object:\n" + result.path);
 
         const nlohmann::json section = config.value("console", nlohmann::json::object());
         if (!section.is_object())
-            return invalid_result(result.path, "missing or invalid console object", "SpoolEase configuration is missing object 'console':\n" + result.path);
+            return invalid_result(result.path, "missing or invalid console object", "Config is missing object 'console':\n" + result.path);
 
         ConsoleConfig console{
             config_string(section, "address"),
@@ -199,7 +218,7 @@ ConfigReadResult read_console_config_file(bool validate_required)
             if (!result.missing_field.empty()) {
                 result.status = "invalid";
                 result.reason = "missing required field " + result.missing_field;
-                result.warning_message = "SpoolEase configuration is missing '" + result.missing_field + "':\n" + result.path;
+                result.warning_message = "Config is missing '" + result.missing_field + "':\n" + result.path;
                 return result;
             }
         }
@@ -210,11 +229,11 @@ ConfigReadResult read_console_config_file(bool validate_required)
     } catch (const std::exception& e) {
         result.status = "read_failed";
         result.reason = e.what();
-        result.warning_message = "Failed to read SpoolEase configuration file:\n" + result.path + "\n\n" + e.what();
+        result.warning_message = "Failed to read config file:\n" + result.path + "\n\n" + e.what();
     } catch (...) {
         result.status = "read_failed";
         result.reason = "unknown error";
-        result.warning_message = "Failed to read SpoolEase configuration file:\n" + result.path;
+        result.warning_message = "Failed to read config file:\n" + result.path;
     }
 
     return result;
@@ -230,6 +249,7 @@ void store_runtime_result(const ConfigReadResult& result)
     s_runtime_config.missing_field = result.missing_field;
     s_runtime_config.warning_message = result.warning_message;
     s_runtime_config.warning_shown = false;
+    update_config_status(result);
 }
 
 void update_runtime_cache_after_save(const ConsoleConfig& console, const std::string& path)
@@ -243,6 +263,7 @@ void update_runtime_cache_after_save(const ConsoleConfig& console, const std::st
     s_runtime_config.missing_field.clear();
     s_runtime_config.warning_message.clear();
     s_runtime_config.warning_shown = false;
+    clear_live_status("config");
 }
 
 void clear_runtime_cache_after_erase(const std::string& path)
@@ -256,6 +277,7 @@ void clear_runtime_cache_after_erase(const std::string& path)
     s_runtime_config.missing_field.clear();
     s_runtime_config.warning_message.clear();
     s_runtime_config.warning_shown = false;
+    set_live_status_warning("config", "Not configured. Open Settings.");
 }
 
 bool fail_save(const std::string& path, const std::string& message, std::string* error)
@@ -336,7 +358,7 @@ bool save_console_config(const ConsoleConfig& console, std::string* error)
     const std::string path = config_file_path();
     try {
         if (path.empty())
-            return fail_save(path, "SpoolEase configuration path is empty.", error);
+            return fail_save(path, "Config path is empty.", error);
 
         fs::create_directories(fs::path(path).parent_path());
 
@@ -355,12 +377,12 @@ bool save_console_config(const ConsoleConfig& console, std::string* error)
 
         boost::nowide::ofstream ofs(path);
         if (!ofs)
-            return fail_save(path, "Failed to open configuration file for writing.", error);
+            return fail_save(path, "Failed to open config file for writing.", error);
 
         ofs << config.dump(4) << "\n";
         ofs.close();
         if (!ofs)
-            return fail_save(path, "Failed to write configuration file.", error);
+            return fail_save(path, "Failed to write config file.", error);
 
         SPOOLEASE_LOG(info) << "SpoolEase: config saved: path=" << path
                             << " address=" << console.address

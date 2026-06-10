@@ -2,6 +2,7 @@
 
 #include "SpoolEaseConfig.hpp"
 #include "SpoolEaseLog.hpp"
+#include "SpoolEaseStatus.hpp"
 #include "SpoolEaseWebPage.hpp"
 
 #include "libslic3r/PresetBundle.hpp"
@@ -294,7 +295,7 @@ PostResult post_custom_filaments(const ConsoleConfig& config, const std::string&
     }
 
     if (result.status < 200 || result.status >= 300) {
-        result.error = "SpoolEase returned HTTP " + std::to_string(result.status);
+        result.error = "API returned HTTP " + std::to_string(result.status);
         if (!result.response.empty())
             result.error += ": " + result.response;
         SPOOLEASE_LOG(warning) << "SpoolEase: custom filament sync returned non-2xx: url=" << url
@@ -316,7 +317,7 @@ PostResult post_custom_filaments(const std::string& custom_filaments)
 
     const std::optional<ConsoleConfig> config = console_config(true, "sync_custom_filaments");
     if (!config.has_value()) {
-        result.error = "SpoolEase is not configured.";
+        result.error = "Not configured.";
         return result;
     }
 
@@ -362,7 +363,7 @@ FetchResult fetch_custom_filaments(const ConsoleConfig& config)
     }
 
     if (result.status < 200 || result.status >= 300) {
-        result.error = "SpoolEase returned HTTP " + std::to_string(result.status);
+        result.error = "API returned HTTP " + std::to_string(result.status);
         if (!result.response.empty())
             result.error += ": " + result.response;
         SPOOLEASE_LOG(warning) << "SpoolEase: custom filament fetch returned non-2xx: url=" << url
@@ -376,13 +377,13 @@ FetchResult fetch_custom_filaments(const ConsoleConfig& config)
         const auto it = body.find("custom_filaments");
         if (it != body.end() && !it->is_null()) {
             if (!it->is_string()) {
-                result.error = "SpoolEase returned invalid custom_filaments.";
+                result.error = "API returned invalid custom_filaments.";
                 return result;
             }
             result.custom_filaments = normalize_custom_filaments_text(it->get<std::string>());
         }
     } catch (const std::exception& e) {
-        result.error = std::string("Failed to parse SpoolEase response: ") + e.what();
+        result.error = std::string("Failed to parse API response: ") + e.what();
         return result;
     }
 
@@ -508,6 +509,7 @@ private:
             m_have_remote_baseline = true;
             m_last_synced_csv = csv;
             clear_failure_state();
+            clear_sticky_status("custom_filament_sync");
             if (posted)
                 request_web_page_reload();
             return;
@@ -523,6 +525,7 @@ private:
 
         SPOOLEASE_LOG(warning) << "SpoolEase: custom filament auto-sync failed: failure_count=" << m_consecutive_failures
                                << " error=\"" << error << "\"";
+        set_sticky_status_error("custom_filament_sync", "Automatic custom filament sync failed: " + error);
     }
 
     void clear_failure_state()

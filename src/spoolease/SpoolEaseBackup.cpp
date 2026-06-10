@@ -2,6 +2,7 @@
 
 #include "SpoolEaseConfig.hpp"
 #include "SpoolEaseLog.hpp"
+#include "SpoolEaseStatus.hpp"
 
 #include "slic3r/GUI/GUI_App.hpp"
 #include "slic3r/GUI/GUI_Utils.hpp"
@@ -76,6 +77,7 @@ struct AutoBackupResult
     bool        ok{false};
     std::string error;
     std::string path;
+    std::string warning;
 };
 
 struct AutomaticBackupFile
@@ -244,7 +246,7 @@ DownloadResult download_backup_to_memory(const ConsoleConfig& config, std::atomi
     }
 
     if (result.status < 200 || result.status >= 300) {
-        result.error = "SpoolEase returned HTTP " + std::to_string(result.status);
+        result.error = "API returned HTTP " + std::to_string(result.status);
         if (!result.data.empty())
             result.error += ": " + result.data;
         SPOOLEASE_LOG(warning) << "SpoolEase: backup download returned non-2xx: url=" << url
@@ -301,7 +303,7 @@ PostResult mark_backup_completed(const ConsoleConfig& config, std::time_t comple
     }
 
     if (result.status < 200 || result.status >= 300) {
-        result.error = "SpoolEase returned HTTP " + std::to_string(result.status);
+        result.error = "API returned HTTP " + std::to_string(result.status);
         if (!result.response.empty())
             result.error += ": " + result.response;
         SPOOLEASE_LOG(warning) << "SpoolEase: backup completion mark returned non-2xx: url=" << url
@@ -407,11 +409,11 @@ bool automatic_backup_exists_for_date(const std::string& folder, const std::stri
     return false;
 }
 
-void prune_automatic_backups(const std::string& folder, int keep_count)
+std::string prune_automatic_backups(const std::string& folder, int keep_count)
 {
     keep_count = std::max(1, keep_count);
     if (!is_existing_directory(folder))
-        return;
+        return {};
 
     std::vector<AutomaticBackupFile> files;
 
@@ -435,6 +437,7 @@ void prune_automatic_backups(const std::string& folder, int keep_count)
                 if (ec) {
                     SPOOLEASE_LOG(warning) << "SpoolEase: empty automatic backup cleanup failed: path=" << path.string()
                                            << " error=\"" << ec.message() << "\"";
+                    return "Automatic backup cleanup failed: " + ec.message();
                 }
                 continue;
             }
@@ -444,7 +447,7 @@ void prune_automatic_backups(const std::string& folder, int keep_count)
     } catch (const std::exception& e) {
         SPOOLEASE_LOG(warning) << "SpoolEase: automatic backup retention scan failed: folder=" << folder
                                << " error=\"" << e.what() << "\"";
-        return;
+        return std::string("Automatic backup retention scan failed: ") + e.what();
     }
 
     std::sort(files.begin(), files.end(), [](const AutomaticBackupFile& lhs, const AutomaticBackupFile& rhs) {
@@ -457,11 +460,13 @@ void prune_automatic_backups(const std::string& folder, int keep_count)
         if (ec) {
             SPOOLEASE_LOG(warning) << "SpoolEase: automatic backup retention delete failed: path=" << files.front().path.string()
                                    << " error=\"" << ec.message() << "\"";
-            break;
+            return "Automatic backup retention cleanup failed: " + ec.message();
         }
         SPOOLEASE_LOG(info) << "SpoolEase: automatic backup retention deleted: path=" << files.front().path.string();
         files.erase(files.begin());
     }
+
+    return {};
 }
 
 int milliseconds_from_seconds(long long seconds)
@@ -489,7 +494,7 @@ int milliseconds_until_next_daily_check()
 bool write_backup_file(const std::string& path, const std::string& data, std::string& error)
 {
     if (data.empty()) {
-        error = "SpoolEase returned an empty backup.";
+        error = "Backup response was empty.";
         return false;
     }
 
@@ -527,7 +532,7 @@ AutoBackupResult run_automatic_backup(ConsoleConfig config)
     }
 
     if (download.data.empty()) {
-        result.error = "SpoolEase returned an empty backup.";
+        result.error = "Backup response was empty.";
         SPOOLEASE_LOG(warning) << "SpoolEase: automatic backup rejected empty response";
         return result;
     }
@@ -544,9 +549,15 @@ AutoBackupResult run_automatic_backup(ConsoleConfig config)
     if (!mark_result.ok) {
         SPOOLEASE_LOG(warning) << "SpoolEase: automatic backup saved but completion mark failed: path=" << save_path
                                << " error=\"" << mark_result.error << "\"";
+        result.warning = "Automatic backup completion mark failed: " + mark_result.error;
     }
 
-    prune_automatic_backups(config.backup_folder, config.auto_backup_keep_count);
+    const std::string prune_warning = prune_automatic_backups(config.backup_folder, config.auto_backup_keep_count);
+    if (!prune_warning.empty()) {
+        if (!result.warning.empty())
+            result.warning += "\n";
+        result.warning += prune_warning;
+    }
 
     result.ok = true;
     result.path = save_path;
@@ -718,7 +729,7 @@ private:
         }
 
         if (result.data.empty()) {
-            finish(_L("Backup failed."), true, false, _L("SpoolEase returned an empty backup. No backup file was saved."));
+            finish(_L("Backup failed."), true, false, _L("Backup response was empty. No backup file was saved."));
             return;
         }
 
@@ -892,18 +903,23 @@ private:
 
         const std::optional<ConsoleConfig> config = console_config(false, "automatic_backup");
         if (!config.has_value() || !config->auto_backup_enabled) {
+            clear_live_status("backup_config");
             schedule_after(automatic_backup_retry_delay_ms);
             return;
         }
 
         if (!is_existing_directory(config->backup_folder)) {
             SPOOLEASE_LOG(warning) << "SpoolEase: automatic backup skipped: backup folder missing or invalid: folder=" << config->backup_folder;
+            set_live_status_warning("backup_config", "Automatic backup is enabled, but the backup folder is missing or invalid: " + config->backup_folder);
             schedule_after(automatic_backup_retry_delay_ms);
             return;
         }
 
+        clear_live_status("backup_config");
+
         const std::string today = local_date_stamp(std::time(nullptr));
         if (automatic_backup_exists_for_date(config->backup_folder, today)) {
+            clear_sticky_status("automatic_backup");
             schedule_next_daily_check();
             return;
         }
@@ -935,11 +951,16 @@ private:
     {
         m_in_flight = false;
         if (result.ok) {
+            if (result.warning.empty())
+                clear_sticky_status("automatic_backup");
+            else
+                set_sticky_status_error("automatic_backup", result.warning);
             schedule_next_daily_check();
             return;
         }
 
         SPOOLEASE_LOG(warning) << "SpoolEase: automatic backup failed: error=\"" << result.error << "\"";
+        set_sticky_status_error("automatic_backup", "Automatic backup failed: " + result.error);
         schedule_after(automatic_backup_retry_delay_ms);
     }
 

@@ -3,6 +3,7 @@
 #include "SpoolEaseConfig.hpp"
 #include "SpoolEaseBackup.hpp"
 #include "SpoolEaseCustomFilaments.hpp"
+#include "SpoolEaseInventory.hpp"
 #include "SpoolEaseLog.hpp"
 
 #include "slic3r/GUI/GUI_App.hpp"
@@ -826,6 +827,7 @@ wxMenu* create_config_menu(wxWindow& parent)
 
 void install_config_menu(wxWindow& parent, wxMenuBar* menubar, AddTopbarSubmenuFn add_topbar_submenu)
 {
+    start_inventory_polling();
     start_custom_filament_auto_sync();
     start_automatic_backup_scheduler();
 

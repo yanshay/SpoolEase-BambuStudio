@@ -402,8 +402,6 @@ bool delete_console_config(std::string* error)
 
 std::string web_page_url()
 {
-    start_inventory_polling();
-
     const std::optional<ConsoleConfig> config = console_config(true, "web_page");
     if (!config.has_value())
         return {};

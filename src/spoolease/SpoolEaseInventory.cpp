@@ -2,6 +2,7 @@
 
 #include "SpoolEaseConfig.hpp"
 #include "SpoolEaseLog.hpp"
+#include "SpoolEaseStatus.hpp"
 
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
@@ -154,6 +155,7 @@ std::optional<std::string> fetch_slots_json(const ConsoleConfig& config)
     CURL* curl = curl_easy_init();
     if (!curl) {
         SPOOLEASE_LOG(error) << "SpoolEase: API curl init failed";
+        set_live_status_error("inventory_api", "API error: failed to initialize HTTP client.");
         return std::nullopt;
     }
 
@@ -230,6 +232,7 @@ std::optional<std::string> fetch_slots_json(const ConsoleConfig& config)
                                    << " error=\"" << error_message << "\""
                                    << " total_ms=" << total_ms;
         }
+        set_live_status_error("inventory_api", "API error: " + error_message);
         return std::nullopt;
     }
 
@@ -240,6 +243,7 @@ std::optional<std::string> fetch_slots_json(const ConsoleConfig& config)
                                << " request_body_bytes=0"
                                << " response_body_bytes=" << body.size()
                                << " total_ms=" << total_ms;
+        set_live_status_error("inventory_api", "API error: HTTP " + std::to_string(status) + ".");
         return std::nullopt;
     }
 
@@ -439,6 +443,7 @@ private:
         const std::optional<ConsoleConfig> config = console_config(false, "api_loop");
         if (!config.has_value()) {
             note_config_key({});
+            clear_live_status("inventory_api");
             return;
         }
 
@@ -453,19 +458,23 @@ private:
             ParseSlotsResult parsed = parse_slots_json(*body);
             if (parsed.cache.has_value()) {
                 replace_cache(std::move(*parsed.cache));
+                clear_live_status("inventory_api");
             } else {
                 SPOOLEASE_LOG(warning) << "SpoolEase: API JSON schema invalid: url=" << url
                                        << " response_body_bytes=" << body->size()
                                        << " reason=\"" << parsed.error << "\"";
+                set_live_status_error("inventory_api", "API response schema is invalid: " + parsed.error);
             }
         } catch (const std::exception& e) {
             SPOOLEASE_LOG(warning) << "SpoolEase: API JSON parse failed: url=" << url
                                    << " response_body_bytes=" << body->size()
                                    << " error=\"" << e.what() << "\"";
+            set_live_status_error("inventory_api", std::string("API response is not valid JSON: ") + e.what());
         } catch (...) {
             SPOOLEASE_LOG(warning) << "SpoolEase: API JSON parse failed: url=" << url
                                    << " response_body_bytes=" << body->size()
                                    << " error=\"unknown error\"";
+            set_live_status_error("inventory_api", "API response is not valid JSON.");
         }
     }
 

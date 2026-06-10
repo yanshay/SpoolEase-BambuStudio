@@ -2,6 +2,7 @@
 
 #include "SpoolEaseConfig.hpp"
 #include "SpoolEaseLog.hpp"
+#include "SpoolEaseStatus.hpp"
 
 #include "libslic3r/Utils.hpp"
 
@@ -226,6 +227,7 @@ public:
         SetSizer(sizer);
 
         bind_events();
+        register_status_page(this);
 
         Layout();
         sizer->Layout();
@@ -237,6 +239,7 @@ public:
             wxTheApp->Unbind(EVT_SPOOLEASE_CONFIG_CHANGED, &SpoolEaseWebPage::on_config_changed, this);
             wxTheApp->Unbind(EVT_SPOOLEASE_WEB_PAGE_RELOAD, &SpoolEaseWebPage::on_reload_requested, this);
         }
+        unregister_status_page(this);
     }
 
 private:

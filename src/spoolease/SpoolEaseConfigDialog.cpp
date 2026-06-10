@@ -5,6 +5,7 @@
 #include "SpoolEaseCustomFilaments.hpp"
 #include "SpoolEaseInventory.hpp"
 #include "SpoolEaseLog.hpp"
+#include "SpoolEaseStatus.hpp"
 
 #include "slic3r/GUI/GUI_App.hpp"
 #include "slic3r/GUI/GUI_Utils.hpp"
@@ -820,6 +821,10 @@ wxMenu* create_config_menu(wxWindow& parent)
     menu->Bind(wxEVT_MENU, [&parent](wxCommandEvent&) { backup_to_local_disk(parent); }, backup_item->GetId());
     wxMenuItem* sync_item = menu->Append(wxID_ANY, _L("Sync Custom Filaments"), _L("Submit custom filament settings to SpoolEase"));
     menu->Bind(wxEVT_MENU, [&parent](wxCommandEvent&) { sync_custom_filaments(parent); }, sync_item->GetId());
+    menu->AppendSeparator();
+    wxMenuItem* dismiss_item = menu->Append(wxID_ANY, _L("Dismiss Error Status"), _L("Dismiss background SpoolEase error status"));
+    menu->Bind(wxEVT_MENU, [](wxCommandEvent&) { dismiss_error_status(); }, dismiss_item->GetId());
+    parent.Bind(wxEVT_UPDATE_UI, [](wxUpdateUIEvent& event) { event.Enable(has_dismissible_error_status()); }, dismiss_item->GetId());
     return menu;
 }
 

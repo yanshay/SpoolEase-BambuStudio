@@ -252,6 +252,73 @@ std::string curl_error_string(CURLcode curl_code, const std::array<char, CURL_ER
     return error;
 }
 
+long long curl_time_ms(CURL* curl, CURLINFO info)
+{
+    double total_seconds = 0.0;
+    if (curl_easy_getinfo(curl, info, &total_seconds) == CURLE_OK && total_seconds >= 0.0)
+        return static_cast<long long>(total_seconds * 1000.0 + 0.5);
+    return 0;
+}
+
+std::string curl_string_info(CURL* curl, CURLINFO info)
+{
+    char* value = nullptr;
+    if (curl_easy_getinfo(curl, info, &value) == CURLE_OK && value)
+        return value;
+    return {};
+}
+
+long curl_long_info(CURL* curl, CURLINFO info)
+{
+    long value = 0;
+    curl_easy_getinfo(curl, info, &value);
+    return value;
+}
+
+struct CurlDiagnostics
+{
+    std::string primary_ip;
+    long        primary_port{0};
+    std::string local_ip;
+    long        local_port{0};
+    long long   namelookup_ms{0};
+    long long   connect_ms{0};
+    long long   appconnect_ms{0};
+    long long   total_ms{0};
+};
+
+CurlDiagnostics curl_diagnostics(CURL* curl)
+{
+    CurlDiagnostics diagnostics;
+#if LIBCURL_VERSION_NUM >= 0x071300
+    diagnostics.primary_ip = curl_string_info(curl, CURLINFO_PRIMARY_IP);
+#endif
+#if LIBCURL_VERSION_NUM >= 0x071500
+    diagnostics.primary_port = curl_long_info(curl, CURLINFO_PRIMARY_PORT);
+    diagnostics.local_ip = curl_string_info(curl, CURLINFO_LOCAL_IP);
+    diagnostics.local_port = curl_long_info(curl, CURLINFO_LOCAL_PORT);
+#endif
+    diagnostics.namelookup_ms = curl_time_ms(curl, CURLINFO_NAMELOOKUP_TIME);
+    diagnostics.connect_ms = curl_time_ms(curl, CURLINFO_CONNECT_TIME);
+    diagnostics.appconnect_ms = curl_time_ms(curl, CURLINFO_APPCONNECT_TIME);
+    diagnostics.total_ms = curl_time_ms(curl, CURLINFO_TOTAL_TIME);
+    return diagnostics;
+}
+
+std::string curl_diagnostics_log(const CurlDiagnostics& diagnostics)
+{
+    std::ostringstream out;
+    out << " primary_ip=\"" << (diagnostics.primary_ip.empty() ? "-" : diagnostics.primary_ip) << "\""
+        << " primary_port=" << diagnostics.primary_port
+        << " local_ip=\"" << (diagnostics.local_ip.empty() ? "-" : diagnostics.local_ip) << "\""
+        << " local_port=" << diagnostics.local_port
+        << " namelookup_ms=" << diagnostics.namelookup_ms
+        << " connect_ms=" << diagnostics.connect_ms
+        << " appconnect_ms=" << diagnostics.appconnect_ms
+        << " total_ms=" << diagnostics.total_ms;
+    return out.str();
+}
+
 PostResult post_custom_filaments(const ConsoleConfig& config, const std::string& custom_filaments)
 {
     PostResult result;
@@ -282,6 +349,7 @@ PostResult post_custom_filaments(const ConsoleConfig& config, const std::string&
 
     const CURLcode curl_code = curl_easy_perform(curl);
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &result.status);
+    const CurlDiagnostics diagnostics = curl_diagnostics(curl);
 
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
@@ -290,7 +358,8 @@ PostResult post_custom_filaments(const ConsoleConfig& config, const std::string&
         result.error = curl_error_string(curl_code, curl_error);
         SPOOLEASE_LOG(warning) << "SpoolEase: custom filament sync failed: url=" << url
                                << " curl_code=" << static_cast<int>(curl_code)
-                               << " error=\"" << result.error << "\"";
+                               << " error=\"" << result.error << "\""
+                               << curl_diagnostics_log(diagnostics);
         return result;
     }
 
@@ -300,7 +369,8 @@ PostResult post_custom_filaments(const ConsoleConfig& config, const std::string&
             result.error += ": " + result.response;
         SPOOLEASE_LOG(warning) << "SpoolEase: custom filament sync returned non-2xx: url=" << url
                                << " status=" << result.status
-                               << " response_body_bytes=" << result.response.size();
+                               << " response_body_bytes=" << result.response.size()
+                               << curl_diagnostics_log(diagnostics);
         return result;
     }
 
@@ -350,6 +420,7 @@ FetchResult fetch_custom_filaments(const ConsoleConfig& config)
 
     const CURLcode curl_code = curl_easy_perform(curl);
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &result.status);
+    const CurlDiagnostics diagnostics = curl_diagnostics(curl);
 
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
@@ -358,7 +429,8 @@ FetchResult fetch_custom_filaments(const ConsoleConfig& config)
         result.error = curl_error_string(curl_code, curl_error);
         SPOOLEASE_LOG(warning) << "SpoolEase: custom filament fetch failed: url=" << url
                                << " curl_code=" << static_cast<int>(curl_code)
-                               << " error=\"" << result.error << "\"";
+                               << " error=\"" << result.error << "\""
+                               << curl_diagnostics_log(diagnostics);
         return result;
     }
 
@@ -368,7 +440,8 @@ FetchResult fetch_custom_filaments(const ConsoleConfig& config)
             result.error += ": " + result.response;
         SPOOLEASE_LOG(warning) << "SpoolEase: custom filament fetch returned non-2xx: url=" << url
                                << " status=" << result.status
-                               << " response_body_bytes=" << result.response.size();
+                               << " response_body_bytes=" << result.response.size()
+                               << curl_diagnostics_log(diagnostics);
         return result;
     }
 

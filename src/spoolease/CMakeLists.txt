@@ -49,6 +49,10 @@ set(SLIC3R_GUI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseBackup.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseCustomFilaments.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseCustomFilaments.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseDropdownTooltip.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseDropdownTooltip.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseFilamentTooltips.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseFilamentTooltips.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseWebPage.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseWebPage.hpp
     PARENT_SCOPE

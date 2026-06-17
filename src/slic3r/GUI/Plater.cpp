@@ -153,6 +153,7 @@
 #include "InstanceCheck.hpp"
 #include "NotificationManager.hpp"
 #include "PresetComboBoxes.hpp"
+#include "spoolease/SpoolEaseFilamentTooltips.hpp"
 #include "MsgDialog.hpp"
 #include "SingleChoiceDialog.hpp"
 #include "TextureImportDialog.hpp"
@@ -7372,6 +7373,7 @@ void Sidebar::sync_ams_list(bool is_from_big_sync_btn)
     BOOST_LOG_TRIVIAL(info) << "on_filament_count_change";
     wxGetApp().plater()->on_filament_count_change(n);
     BOOST_LOG_TRIVIAL(info) << "finish on_filament_count_change";
+    Slic3r::SpoolEase::record_filament_sync_result(p->ams_list_device, sync_result.direct_sync, sync_result.sync_maps, skip_ext);
     for (auto& c : p->combos_filament)
         c->update();
     // Expand filament list
@@ -7395,6 +7397,7 @@ void Sidebar::sync_ams_list(bool is_from_big_sync_btn)
     auto badge_combox_filament = [this](size_t idx, PlaterPresetComboBox *c) {
         auto tip     = _L("Filament type and color information have been synchronized, but slot information is not included.");
         c->SetToolTip(tip);
+        Slic3r::SpoolEase::update_filament_combo_tooltip(*c);
         c->ShowBadge(true);
         // Keep the nozzle label/divider layout in sync with this badge change.
         p->reposition_filament_nozzle_indicator(idx);

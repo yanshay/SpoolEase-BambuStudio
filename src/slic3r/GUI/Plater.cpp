@@ -7372,6 +7372,7 @@ void Sidebar::sync_ams_list(bool is_from_big_sync_btn)
     BOOST_LOG_TRIVIAL(info) << "on_filament_count_change";
     wxGetApp().plater()->on_filament_count_change(n);
     BOOST_LOG_TRIVIAL(info) << "finish on_filament_count_change";
+    Slic3r::SpoolEase::record_filament_sync_result(p->ams_list_device, sync_result.direct_sync, sync_result.sync_maps, skip_ext);
     for (auto& c : p->combos_filament)
         c->update();
     // Expand filament list

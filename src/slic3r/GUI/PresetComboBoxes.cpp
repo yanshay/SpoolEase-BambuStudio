@@ -53,6 +53,7 @@
 
 #include "DeviceCore/DevManager.h"
 #include "libslic3r/Log.hpp"
+#include "spoolease/SpoolEaseFilamentTooltips.hpp"
 
 // A workaround for a set of issues related to text fitting into gtk widgets:
 #if defined(__WXGTK20__) || defined(__WXGTK3__)
@@ -1020,6 +1021,7 @@ bool PresetComboBox::add_ams_filaments(std::string selected, bool alias_name)
         auto text = get_preset_name(*iter);
         int      item_id = Append(text, bmp.ConvertToImage(), &m_first_ams_filament + entry.first);
         SetFlag(GetCount() - 1, (int) FilamentAMSType::FROM_AMS);
+        Slic3r::SpoolEase::set_ams_filament_item_tooltip(*this, item_id, tray);
         if (text == selected) {
             DynamicPrintConfig *cfg    = &wxGetApp().preset_bundle->project_config;
             if (cfg) {

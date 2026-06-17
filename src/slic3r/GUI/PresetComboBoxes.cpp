@@ -45,6 +45,7 @@
 #include "wxExtensions.hpp"
 
 #include "DeviceCore/DevManager.h"
+#include "spoolease/SpoolEaseFilamentTooltips.hpp"
 
 // A workaround for a set of issues related to text fitting into gtk widgets:
 #if defined(__WXGTK20__) || defined(__WXGTK3__)
@@ -568,6 +569,7 @@ bool PresetComboBox::add_ams_filaments(std::string selected, bool alias_name)
             auto text = get_preset_name(*iter);
             int      item_id = Append(text, bmp.ConvertToImage(), &m_first_ams_filament + entry.first);
             SetFlag(GetCount() - 1, (int) FilamentAMSType::FROM_AMS);
+            Slic3r::SpoolEase::set_ams_filament_item_tooltip(*this, item_id, tray);
             if (text == selected) {
                 DynamicPrintConfig *cfg    = &wxGetApp().preset_bundle->project_config;
                 if (cfg) {
@@ -986,6 +988,9 @@ void PlaterPresetComboBox::OnSelect(wxCommandEvent &evt)
         if (m_type == Preset::TYPE_FILAMENT)
             update_ams_color();
     }
+
+    if (m_type == Preset::TYPE_FILAMENT)
+        Slic3r::SpoolEase::record_filament_combo_selection(*this, selected_item);
 
     evt.Skip();
 }
@@ -1442,6 +1447,7 @@ void PlaterPresetComboBox::update()
 #endif
         SetToolTip(tooltip);
     }
+    Slic3r::SpoolEase::update_filament_combo_tooltip(*this);
 
 #ifdef __WXMSW__
     // Use this part of code just on Windows to avoid of some layout issues on Linux

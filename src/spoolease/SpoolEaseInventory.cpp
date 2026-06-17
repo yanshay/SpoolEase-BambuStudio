@@ -23,6 +23,10 @@
 #include <unordered_map>
 
 namespace Slic3r { namespace SpoolEase {
+void refresh_filament_combo_tooltips();
+}}
+
+namespace Slic3r { namespace SpoolEase {
 
 namespace {
 
@@ -335,7 +339,9 @@ bool cache_equals(const std::unordered_map<std::string, SlotInventory>& lhs, con
         const auto it = rhs.find(item.first);
         if (it == rhs.end())
             return false;
-        if (item.second.spool_id != it->second.spool_id || item.second.weight_net != it->second.weight_net)
+        if (item.second.spool_id != it->second.spool_id || item.second.weight_net != it->second.weight_net ||
+            item.second.brand != it->second.brand || item.second.material_type != it->second.material_type ||
+            item.second.material_subtype != it->second.material_subtype || item.second.color_name != it->second.color_name)
             return false;
     }
 
@@ -386,7 +392,12 @@ ParseSlotsResult parse_slots_json(const std::string& body)
                 if (slot_id.empty() || spool_id.empty())
                     continue;
 
-                cache[cache_key(printer_serial, ams_id, slot_id)] = SlotInventory{spool_id, json_float(slot, "weight_net")};
+                cache[cache_key(printer_serial, ams_id, slot_id)] = SlotInventory{spool_id,
+                                                                                  json_float(slot, "weight_net"),
+                                                                                  json_string(slot, "spool_brand"),
+                                                                                  json_string(slot, "spool_material_type"),
+                                                                                  json_string(slot, "spool_material_subtype"),
+                                                                                  json_string(slot, "spool_color_name")};
             }
         }
     }
@@ -405,6 +416,7 @@ void request_ui_refresh()
             return;
         if (wxWindow* top = wxTheApp->GetTopWindow())
             top->Refresh(true);
+        refresh_filament_combo_tooltips();
     });
 }
 
@@ -570,6 +582,27 @@ std::string display_spool_id(const std::string& spool_id)
     if (spool_id.size() <= 4)
         return spool_id;
     return spool_id.substr(spool_id.size() - 4);
+}
+
+std::string display_spool_details(const SlotInventory& inventory)
+{
+    std::string details = inventory.spool_id;
+    if (!details.empty())
+        details += ".";
+
+    auto append = [&details](const std::string& text) {
+        if (text.empty())
+            return;
+        if (!details.empty())
+            details += " ";
+        details += text;
+    };
+
+    append(inventory.brand);
+    append(inventory.material_type);
+    append(inventory.material_subtype);
+    append(inventory.color_name);
+    return details;
 }
 
 std::string display_weight(std::optional<float> weight)

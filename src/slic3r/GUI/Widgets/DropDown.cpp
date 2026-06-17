@@ -1,5 +1,6 @@
 #include "DropDown.hpp"
 #include "Label.hpp"
+#include "spoolease/SpoolEaseDropdownTooltip.hpp"
 
 #include <cstdio>
 #include <wx/display.h>
@@ -716,6 +717,7 @@ void DropDown::mouseMove(wxMouseEvent &event)
         hover_item = hover;
         int index  = hoverIndex();
         if (index < -1) {
+            Slic3r::SpoolEase::hide_dropdown_tooltip(this);
             auto & drop = *subDropDown;
             drop.group  = items[-index - 2].group;
             drop.need_sync = true;
@@ -731,6 +733,9 @@ void DropDown::mouseMove(wxMouseEvent &event)
                     subDropDown->Dismiss();
             }
             SetToolTip(items[index].tip);
+            Slic3r::SpoolEase::show_dropdown_tooltip(*this, items[index].tip);
+        } else {
+            Slic3r::SpoolEase::hide_dropdown_tooltip(this);
         }
     }
     paintNow();
@@ -754,8 +759,12 @@ void DropDown::mouseWheelMoved(wxMouseEvent &event)
     if (hover >= (int) count) hover = -1;
     if (hover != hover_item) {
         hover_item = hover;
-        if (auto index = hoverIndex(); index >= 0)
+        if (auto index = hoverIndex(); index >= 0) {
             SetToolTip(items[index].tip);
+            Slic3r::SpoolEase::show_dropdown_tooltip(*this, items[index].tip);
+        } else {
+            Slic3r::SpoolEase::hide_dropdown_tooltip(this);
+        }
     }
     paintNow();
 }
@@ -782,6 +791,8 @@ void DropDown::Dismiss()
 
 void DropDown::OnDismiss()
 {
+    Slic3r::SpoolEase::hide_dropdown_tooltip(this);
+    hover_item = -1;
     if (mainDropDown) {
 
         const wxPoint& mouse_pos = wxGetMousePosition();

@@ -55,14 +55,16 @@ jobs:
           echo "RELEASE_TARGET=$head_sha" >> "$GITHUB_ENV"
           echo "RUN_URL=$run_url" >> "$GITHUB_ENV"
 
-      - name: Download Windows and macOS artifacts
+      - name: Download release artifacts
         shell: bash
         run: |
           gh run download "$RUN_ID" \
             --repo "$REPO" \
             --dir artifacts \
             --pattern 'BambuStudio_Windows_*_portable' \
-            --pattern 'BambuStudio_Mac_arm64_*'
+            --pattern 'BambuStudio_Mac_arm64_*' \
+            --pattern 'BambuStudio_ubuntu-22.04_*' \
+            --pattern 'BambuStudio_ubuntu-24.04_*'
 
       - name: Prepare release assets
         shell: bash
@@ -102,6 +104,20 @@ jobs:
             -format UDZO \
             "release/SE_BambuStudio_Mac_universal_${mac_version}.dmg"
 
+          linux_2204=$(find artifacts -type f -name 'Bambu_Studio_ubuntu-22.04_*.AppImage' -print -quit)
+          if [ -z "$linux_2204" ]; then
+            echo "Could not find Ubuntu 22.04 AppImage in downloaded artifacts." >&2
+            exit 1
+          fi
+          cp "$linux_2204" "release/SE_$(basename "$linux_2204")"
+
+          linux_2404=$(find artifacts -type f -name 'Bambu_Studio_ubuntu-24.04_*.AppImage' -print -quit)
+          if [ -z "$linux_2404" ]; then
+            echo "Could not find Ubuntu 24.04 AppImage in downloaded artifacts." >&2
+            exit 1
+          fi
+          cp "$linux_2404" "release/SE_$(basename "$linux_2404")"
+
           ls -lh release
 
       - name: Publish prerelease
@@ -119,9 +135,11 @@ jobs:
           Installation notes:
           - macOS: open the DMG and copy BambuStudio.app to Applications.
           - Windows: extract the portable zip and run bambu-studio.exe from the extracted folder.
+          - Linux: download the AppImage matching your Ubuntu version, make it executable with chmod +x, then run it.
+          - If the AppImage does not start and reports a FUSE/libfuse error, install libfuse2.
 
           Bypassing unsigned app warnings:
-          - On both operating systems, you may need to bypass protection for unsigned apps.
+          - On macOS and Windows, you may need to bypass protection for unsigned apps.
           - Try the instructions at: https://github.com/daltonmenezes/electron-app/blob/main/docs/UNSIGNED_APPS.md
           - If those do not work, try: https://github.com/yanshay/SpoolEase/releases/tag/SpoolEase-Desktop-r0.1.0
           EOF

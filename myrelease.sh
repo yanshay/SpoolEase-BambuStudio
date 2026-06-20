@@ -171,8 +171,13 @@ if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
 fi
 
 if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
-  echo "Git tag already exists on origin: $RELEASE_TAG" >&2
-  exit 1
+  echo "Warning: Git tag already exists on origin: $RELEASE_TAG" >&2
+  echo "The release workflow will use this existing tag instead of creating it." >&2
+  read -r -p "Override this warning and continue? [y/N] " OVERRIDE_EXISTING_TAG
+  case "$OVERRIDE_EXISTING_TAG" in
+    y|Y|yes|YES) ;;
+    *) echo "Cancelled."; exit 0 ;;
+  esac
 fi
 
 echo

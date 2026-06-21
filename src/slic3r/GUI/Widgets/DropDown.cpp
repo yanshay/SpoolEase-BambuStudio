@@ -733,7 +733,7 @@ void DropDown::mouseMove(wxMouseEvent &event)
                     subDropDown->Dismiss();
             }
             SetToolTip(items[index].tip);
-            Slic3r::SpoolEase::show_dropdown_tooltip(*this, items[index].tip);
+            Slic3r::SpoolEase::show_ams_filament_dropdown_tooltip(*this, GetParent(), index);
         } else {
             Slic3r::SpoolEase::hide_dropdown_tooltip(this);
         }
@@ -761,7 +761,7 @@ void DropDown::mouseWheelMoved(wxMouseEvent &event)
         hover_item = hover;
         if (auto index = hoverIndex(); index >= 0) {
             SetToolTip(items[index].tip);
-            Slic3r::SpoolEase::show_dropdown_tooltip(*this, items[index].tip);
+            Slic3r::SpoolEase::show_ams_filament_dropdown_tooltip(*this, GetParent(), index);
         } else {
             Slic3r::SpoolEase::hide_dropdown_tooltip(this);
         }

@@ -1,5 +1,6 @@
 #include "SpoolEaseFilamentTooltips.hpp"
 
+#include "SpoolEaseDropdownTooltip.hpp"
 #include "SpoolEaseInventory.hpp"
 
 #include "libslic3r/PrintConfig.hpp"
@@ -252,28 +253,29 @@ void remember_item_tooltip(GUI::PresetComboBox& combo, int item_id, const SlotSe
         it->slot = slot;
 }
 
-void refresh_item_tooltips()
+bool valid_item_tooltip_target(const ItemTooltipTarget& target)
 {
-    s_item_tooltip_targets.erase(std::remove_if(s_item_tooltip_targets.begin(), s_item_tooltip_targets.end(), [](auto& target) {
-                                     GUI::PresetComboBox* combo = target.combo.get();
-                                     if (!combo || target.item_id < 0)
-                                         return true;
-                                     if (static_cast<unsigned int>(target.item_id) >= combo->GetCount())
-                                         return true;
-                                     if (combo->GetFlag(target.item_id) != static_cast<int>(GUI::PresetComboBox::FilamentAMSType::FROM_AMS)) {
-                                         combo->SetItemTooltip(target.item_id, wxString());
-                                         return true;
-                                     }
-                                     if (target.slot.printer_serial != current_printer_serial()) {
-                                         combo->SetItemTooltip(target.item_id, wxString());
-                                         return true;
-                                     }
+    GUI::PresetComboBox* combo = target.combo.get();
+    if (!combo || target.item_id < 0)
+        return false;
+    if (static_cast<unsigned int>(target.item_id) >= combo->GetCount())
+        return false;
+    if (combo->GetFlag(target.item_id) != static_cast<int>(GUI::PresetComboBox::FilamentAMSType::FROM_AMS))
+        return false;
+    return target.slot.printer_serial == current_printer_serial();
+}
 
-                                     const std::optional<SlotInventory> inventory = inventory_for_slot(target.slot);
-                                     combo->SetItemTooltip(target.item_id, inventory.has_value() ? details_tooltip_for_inventory(*inventory) : wxString());
-                                     return false;
+void prune_item_tooltip_targets()
+{
+    s_item_tooltip_targets.erase(std::remove_if(s_item_tooltip_targets.begin(), s_item_tooltip_targets.end(), [](const auto& target) {
+                                     return !valid_item_tooltip_target(target);
                                  }),
                                  s_item_tooltip_targets.end());
+}
+
+void refresh_item_tooltips()
+{
+    prune_item_tooltip_targets();
 }
 
 } // namespace
@@ -285,10 +287,23 @@ void set_ams_filament_item_tooltip(GUI::PresetComboBox& combo, int item_id, cons
         return;
 
     remember_item_tooltip(combo, item_id, *slot);
-    const std::optional<SlotInventory> inventory = inventory_for_slot(*slot);
-    const wxString tooltip = inventory.has_value() ? details_tooltip_for_inventory(*inventory) : wxString();
-    if (!tooltip.empty())
-        combo.SetItemTooltip(item_id, tooltip);
+    start_inventory_polling();
+}
+
+void show_ams_filament_dropdown_tooltip(wxWindow& owner, wxWindow* combo, int item_id)
+{
+    prune_item_tooltip_targets();
+
+    const auto it = std::find_if(s_item_tooltip_targets.begin(), s_item_tooltip_targets.end(), [combo, item_id](const auto& target) {
+        return target.combo.get() == combo && target.item_id == item_id;
+    });
+    if (it == s_item_tooltip_targets.end()) {
+        hide_dropdown_tooltip(&owner);
+        return;
+    }
+
+    const std::optional<SlotInventory> inventory = inventory_for_slot(it->slot);
+    show_dropdown_tooltip(owner, inventory.has_value() ? details_tooltip_for_inventory(*inventory) : wxString());
 }
 
 void record_filament_combo_selection(GUI::PlaterPresetComboBox& combo, int selection)

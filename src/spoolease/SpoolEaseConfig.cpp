@@ -2,6 +2,7 @@
 
 #include "SpoolEaseInventory.hpp"
 #include "SpoolEaseLog.hpp"
+#include "SpoolEaseSlicerWebSocket.hpp"
 #include "SpoolEaseStatus.hpp"
 
 #include <boost/filesystem.hpp>
@@ -88,6 +89,7 @@ void show_config_warning(const std::string& message)
 void notify_config_changed()
 {
     refresh_inventory_now();
+    refresh_slicer_websocket_now();
 
     if (!wxTheApp) {
         SPOOLEASE_LOG(warning) << "SpoolEase: config change notification failed: wxTheApp unavailable";
@@ -204,7 +206,8 @@ ConfigReadResult read_console_config_file(bool validate_required)
             config_string(section, "backup_folder"),
             section.value("auto_sync_custom_filaments", false),
             section.value("auto_backup_enabled", false),
-            std::max(1, section.value("auto_backup_keep_count", 7))
+            std::max(1, section.value("auto_backup_keep_count", 7)),
+            section.value("proxy_printer_messages", false)
         };
 
         if (validate_required) {
@@ -372,7 +375,8 @@ bool save_console_config(const ConsoleConfig& console, std::string* error)
             {"backup_folder", console.backup_folder},
             {"auto_sync_custom_filaments", console.auto_sync_custom_filaments},
             {"auto_backup_enabled", console.auto_backup_enabled},
-            {"auto_backup_keep_count", std::max(1, console.auto_backup_keep_count)}
+            {"auto_backup_keep_count", std::max(1, console.auto_backup_keep_count)},
+            {"proxy_printer_messages", console.proxy_printer_messages}
         };
 
         boost::nowide::ofstream ofs(path);

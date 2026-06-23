@@ -18,6 +18,7 @@ struct ConsoleConfig
     bool        auto_sync_custom_filaments{false};
     bool        auto_backup_enabled{false};
     int         auto_backup_keep_count{7};
+    bool        proxy_printer_messages{false};
 };
 
 wxDECLARE_EVENT(EVT_SPOOLEASE_CONFIG_CHANGED, wxCommandEvent);

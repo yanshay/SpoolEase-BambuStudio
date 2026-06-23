@@ -5,6 +5,7 @@
 #include "SpoolEaseCustomFilaments.hpp"
 #include "SpoolEaseInventory.hpp"
 #include "SpoolEaseLog.hpp"
+#include "SpoolEaseSlicerWebSocket.hpp"
 #include "SpoolEaseStatus.hpp"
 
 #include "slic3r/GUI/GUI_App.hpp"
@@ -281,6 +282,9 @@ private:
         add_backup_folder_row(page, page_sizer);
         add_auto_backup_row(page, page_sizer);
 
+        page_sizer->Add(make_section_title(page, _L("Advanced")), 0, wxEXPAND | wxTOP, FromDIP(22));
+        add_proxy_printer_messages_row(page, page_sizer);
+
         page_sizer->Add(make_section_title(page, _L("Console")), 0, wxEXPAND | wxTOP, FromDIP(22));
         add_config_path(page, page_sizer);
         add_apply_note(page, page_sizer);
@@ -424,6 +428,25 @@ private:
         sizer->Add(help_row, 0, wxEXPAND | wxTOP, parent->FromDIP(2));
     }
 
+    void add_proxy_printer_messages_row(wxWindow* parent, wxBoxSizer* sizer)
+    {
+        auto* checkbox_row = new wxBoxSizer(wxHORIZONTAL);
+        checkbox_row->AddSpacer(parent->FromDIP(23));
+        m_proxy_printer_messages = new wxCheckBox(parent, wxID_ANY, _L("Proxy printer messages through Bambu Studio if needed"));
+        m_proxy_printer_messages->SetBackgroundColour(*wxWHITE);
+        m_proxy_printer_messages->SetForegroundColour(DESIGN_GRAY900_COLOR);
+        m_proxy_printer_messages->SetFont(Label::Body_13);
+        checkbox_row->Add(m_proxy_printer_messages, 0, wxALIGN_CENTER_VERTICAL | wxALL, parent->FromDIP(3));
+        sizer->Add(checkbox_row, 0, wxEXPAND | wxTOP, parent->FromDIP(12));
+
+        auto* help_row = new wxBoxSizer(wxHORIZONTAL);
+        help_row->AddSpacer(parent->FromDIP(46));
+        auto* help = make_label(parent, _L("When enabled, Console will send printer messages using Bambu Studio. Use only if you know what you're doing and why."), DESIGN_GRAY600_COLOR, Label::Body_13);
+        help->Wrap(parent->FromDIP(SETTINGS_HELP_WRAP_WIDTH));
+        help_row->Add(help, 1, wxEXPAND | wxALL, parent->FromDIP(3));
+        sizer->Add(help_row, 0, wxEXPAND | wxTOP, parent->FromDIP(2));
+    }
+
     void add_backup_folder_row(wxWindow* parent, wxBoxSizer* sizer)
     {
         m_backup_folder = create_text_input(parent);
@@ -535,6 +558,7 @@ private:
         m_backup_folder->GetTextCtrl()->Bind(wxEVT_TEXT, mark_edited);
         m_ca_cert->Bind(wxEVT_TEXT, mark_edited);
         m_auto_sync_custom_filaments->Bind(wxEVT_CHECKBOX, mark_edited);
+        m_proxy_printer_messages->Bind(wxEVT_CHECKBOX, mark_edited);
         m_auto_backup_enabled->Bind(wxEVT_CHECKBOX, [this, mark_edited](wxCommandEvent& event) {
             update_auto_backup_controls();
             mark_edited(event);
@@ -566,6 +590,7 @@ private:
             m_backup_folder->GetTextCtrl()->ChangeValue(wxString::FromUTF8(config->backup_folder));
             m_ca_cert->ChangeValue(wxString::FromUTF8(normalize_pem_text(config->ca_cert_pem)));
             m_auto_sync_custom_filaments->SetValue(config->auto_sync_custom_filaments);
+            m_proxy_printer_messages->SetValue(config->proxy_printer_messages);
             m_auto_backup_enabled->SetValue(config->auto_backup_enabled);
             m_auto_backup_keep_count->SetValue(std::max(1, config->auto_backup_keep_count));
             m_provide_ca->SetValue(!config->ca_cert_pem.empty());
@@ -609,6 +634,7 @@ private:
             && field_value(m_backup_folder).empty()
             && (!m_provide_ca->GetValue() || pem_value(m_ca_cert).empty())
             && !m_auto_sync_custom_filaments->GetValue()
+            && !m_proxy_printer_messages->GetValue()
             && !m_auto_backup_enabled->GetValue();
     }
 
@@ -731,6 +757,7 @@ private:
         m_backup_folder->GetTextCtrl()->ChangeValue(wxEmptyString);
         m_ca_cert->ChangeValue(wxEmptyString);
         m_auto_sync_custom_filaments->SetValue(false);
+        m_proxy_printer_messages->SetValue(false);
         m_auto_backup_enabled->SetValue(false);
         m_auto_backup_keep_count->SetValue(7);
         m_no_verify->SetValue(true);
@@ -766,6 +793,7 @@ private:
         config.backup_folder = field_value(m_backup_folder);
         config.ca_cert_pem = m_provide_ca->GetValue() ? pem_value(m_ca_cert) : std::string();
         config.auto_sync_custom_filaments = m_auto_sync_custom_filaments->GetValue();
+        config.proxy_printer_messages = m_proxy_printer_messages->GetValue();
         config.auto_backup_enabled = m_auto_backup_enabled->GetValue();
         config.auto_backup_keep_count = std::max(1, m_auto_backup_keep_count->GetValue());
 
@@ -786,6 +814,7 @@ private:
     TextInput*                     m_api_token{nullptr};
     TextInput*                     m_backup_folder{nullptr};
     wxCheckBox*                    m_auto_sync_custom_filaments{nullptr};
+    wxCheckBox*                    m_proxy_printer_messages{nullptr};
     wxCheckBox*                    m_auto_backup_enabled{nullptr};
     wxSpinCtrl*                    m_auto_backup_keep_count{nullptr};
     wxStaticText*                  m_auto_backup_keep_count_label{nullptr};
@@ -834,6 +863,7 @@ void install_config_menu(wxWindow& parent, wxMenuBar* menubar, AddTopbarSubmenuF
 {
     start_inventory_polling();
     start_custom_filament_auto_sync();
+    start_slicer_websocket();
     start_automatic_backup_scheduler();
 
     wxMenu* menu = create_config_menu(parent);

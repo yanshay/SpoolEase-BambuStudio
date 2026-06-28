@@ -198,6 +198,9 @@ ConfigReadResult read_console_config_file(bool validate_required)
         if (!section.is_object())
             return invalid_result(result.path, "missing or invalid console object", "Config is missing object 'console':\n" + result.path);
 
+        const auto proxy_printer_messages_it = section.find("proxy_printer_messages");
+        const bool proxy_printer_messages_configured = proxy_printer_messages_it != section.end() && proxy_printer_messages_it->is_boolean();
+
         ConsoleConfig console{
             config_string(section, "address"),
             config_string(section, "security_key"),
@@ -207,7 +210,8 @@ ConfigReadResult read_console_config_file(bool validate_required)
             section.value("auto_sync_custom_filaments", false),
             section.value("auto_backup_enabled", false),
             std::max(1, section.value("auto_backup_keep_count", 7)),
-            section.value("proxy_printer_messages", false)
+            proxy_printer_messages_configured,
+            proxy_printer_messages_configured ? proxy_printer_messages_it->get<bool>() : false
         };
 
         if (validate_required) {
@@ -367,7 +371,7 @@ bool save_console_config(const ConsoleConfig& console, std::string* error)
 
         nlohmann::json config;
         config["version"] = 1;
-        config["console"] = {
+        nlohmann::json console_json = {
             {"address", console.address},
             {"security_key", console.security_key},
             {"api_token", console.api_token},
@@ -375,9 +379,11 @@ bool save_console_config(const ConsoleConfig& console, std::string* error)
             {"backup_folder", console.backup_folder},
             {"auto_sync_custom_filaments", console.auto_sync_custom_filaments},
             {"auto_backup_enabled", console.auto_backup_enabled},
-            {"auto_backup_keep_count", std::max(1, console.auto_backup_keep_count)},
-            {"proxy_printer_messages", console.proxy_printer_messages}
+            {"auto_backup_keep_count", std::max(1, console.auto_backup_keep_count)}
         };
+        if (console.proxy_printer_messages_configured)
+            console_json["proxy_printer_messages"] = console.proxy_printer_messages;
+        config["console"] = std::move(console_json);
 
         boost::nowide::ofstream ofs(path);
         if (!ofs)

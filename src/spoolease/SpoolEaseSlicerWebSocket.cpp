@@ -153,7 +153,8 @@ websocket::ping_data heartbeat_ping_data()
 
 std::string unsupported_state_key(const ConsoleConfig& config)
 {
-    return connection_key(config) + '\x1f' + (config.proxy_printer_messages ? "1" : "0");
+    return connection_key(config) + '\x1f' + (config.proxy_printer_messages_configured ? "1" : "0")
+        + '\x1f' + (config.proxy_printer_messages ? "1" : "0");
 }
 
 class UnsupportedSlicerWebSocket : public std::runtime_error
@@ -200,7 +201,7 @@ void schedule_message(std::string message)
             }
 
             const std::optional<ConsoleConfig> config = console_config(false, "slicer_ws_message");
-            if (!config.has_value() || !config->proxy_printer_messages) {
+            if (!config.has_value() || !config->proxy_printer_messages_enabled()) {
                 clear_live_status(proxy_status_key);
                 SPOOLEASE_LOG(info) << "SpoolEase: slicer printer proxy message ignored: proxy disabled";
                 return;
@@ -407,6 +408,13 @@ private:
             const std::optional<ConsoleConfig> config = console_config(false, "slicer_ws");
             if (!config.has_value()) {
                 clear_live_status(ws_status_key);
+                clear_live_status(proxy_status_key);
+                wait_or_wake(reconnect_interval);
+                continue;
+            }
+            if (!config->proxy_printer_messages_configured) {
+                clear_live_status(ws_status_key);
+                clear_live_status(proxy_status_key);
                 wait_or_wake(reconnect_interval);
                 continue;
             }
@@ -415,7 +423,7 @@ private:
                 connect_and_read(*config);
             } catch (const UnsupportedSlicerWebSocket& e) {
                 if (!m_stop) {
-                    if (config->proxy_printer_messages) {
+                    if (config->proxy_printer_messages_enabled()) {
                         set_live_status_warning(ws_status_key, "Console version does not support slicer proxy.");
                         SPOOLEASE_LOG(warning) << "SpoolEase: slicer WebSocket unsupported by console: error=\"" << e.what() << "\"";
                     } else {

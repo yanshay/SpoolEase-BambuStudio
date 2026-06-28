@@ -35,6 +35,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -218,6 +219,7 @@ public:
         SPOOLEASE_LOG(info) << "SpoolEase: settings dialog opened";
 
         SetBackgroundColour(*wxWHITE);
+        m_loaded_config = console_config_for_edit(&m_load_error);
         build_ui();
         load_config();
         update_certificate_controls();
@@ -282,8 +284,10 @@ private:
         add_backup_folder_row(page, page_sizer);
         add_auto_backup_row(page, page_sizer);
 
-        page_sizer->Add(make_section_title(page, _L("Advanced")), 0, wxEXPAND | wxTOP, FromDIP(22));
-        add_proxy_printer_messages_row(page, page_sizer);
+        if (m_loaded_config.has_value() && m_loaded_config->proxy_printer_messages_configured) {
+            page_sizer->Add(make_section_title(page, _L("Advanced")), 0, wxEXPAND | wxTOP, FromDIP(22));
+            add_proxy_printer_messages_row(page, page_sizer);
+        }
 
         page_sizer->Add(make_section_title(page, _L("Console")), 0, wxEXPAND | wxTOP, FromDIP(22));
         add_config_path(page, page_sizer);
@@ -558,7 +562,8 @@ private:
         m_backup_folder->GetTextCtrl()->Bind(wxEVT_TEXT, mark_edited);
         m_ca_cert->Bind(wxEVT_TEXT, mark_edited);
         m_auto_sync_custom_filaments->Bind(wxEVT_CHECKBOX, mark_edited);
-        m_proxy_printer_messages->Bind(wxEVT_CHECKBOX, mark_edited);
+        if (m_proxy_printer_messages)
+            m_proxy_printer_messages->Bind(wxEVT_CHECKBOX, mark_edited);
         m_auto_backup_enabled->Bind(wxEVT_CHECKBOX, [this, mark_edited](wxCommandEvent& event) {
             update_auto_backup_controls();
             mark_edited(event);
@@ -581,8 +586,7 @@ private:
 
     void load_config()
     {
-        std::string error;
-        const std::optional<ConsoleConfig> config = console_config_for_edit(&error);
+        const std::optional<ConsoleConfig>& config = m_loaded_config;
         if (config.has_value()) {
             m_address->GetTextCtrl()->ChangeValue(wxString::FromUTF8(config->address));
             m_security_key->GetTextCtrl()->ChangeValue(wxString::FromUTF8(config->security_key));
@@ -590,7 +594,8 @@ private:
             m_backup_folder->GetTextCtrl()->ChangeValue(wxString::FromUTF8(config->backup_folder));
             m_ca_cert->ChangeValue(wxString::FromUTF8(normalize_pem_text(config->ca_cert_pem)));
             m_auto_sync_custom_filaments->SetValue(config->auto_sync_custom_filaments);
-            m_proxy_printer_messages->SetValue(config->proxy_printer_messages);
+            if (m_proxy_printer_messages)
+                m_proxy_printer_messages->SetValue(config->proxy_printer_messages);
             m_auto_backup_enabled->SetValue(config->auto_backup_enabled);
             m_auto_backup_keep_count->SetValue(std::max(1, config->auto_backup_keep_count));
             m_provide_ca->SetValue(!config->ca_cert_pem.empty());
@@ -601,7 +606,6 @@ private:
             m_provide_ca->SetValue(false);
         }
 
-        m_load_error = error;
         update_auto_backup_controls();
     }
 
@@ -634,7 +638,7 @@ private:
             && field_value(m_backup_folder).empty()
             && (!m_provide_ca->GetValue() || pem_value(m_ca_cert).empty())
             && !m_auto_sync_custom_filaments->GetValue()
-            && !m_proxy_printer_messages->GetValue()
+            && (!m_proxy_printer_messages || !m_proxy_printer_messages->GetValue())
             && !m_auto_backup_enabled->GetValue();
     }
 
@@ -757,7 +761,8 @@ private:
         m_backup_folder->GetTextCtrl()->ChangeValue(wxEmptyString);
         m_ca_cert->ChangeValue(wxEmptyString);
         m_auto_sync_custom_filaments->SetValue(false);
-        m_proxy_printer_messages->SetValue(false);
+        if (m_proxy_printer_messages)
+            m_proxy_printer_messages->SetValue(false);
         m_auto_backup_enabled->SetValue(false);
         m_auto_backup_keep_count->SetValue(7);
         m_no_verify->SetValue(true);
@@ -793,7 +798,8 @@ private:
         config.backup_folder = field_value(m_backup_folder);
         config.ca_cert_pem = m_provide_ca->GetValue() ? pem_value(m_ca_cert) : std::string();
         config.auto_sync_custom_filaments = m_auto_sync_custom_filaments->GetValue();
-        config.proxy_printer_messages = m_proxy_printer_messages->GetValue();
+        config.proxy_printer_messages_configured = m_proxy_printer_messages != nullptr;
+        config.proxy_printer_messages = m_proxy_printer_messages && m_proxy_printer_messages->GetValue();
         config.auto_backup_enabled = m_auto_backup_enabled->GetValue();
         config.auto_backup_keep_count = std::max(1, m_auto_backup_keep_count->GetValue());
 
@@ -831,6 +837,7 @@ private:
     std::vector<TextInput*>        m_text_inputs;
     std::vector<Slic3r::GUI::RadioBox*> m_radios;
     std::vector<Button*>           m_buttons;
+    std::optional<ConsoleConfig>   m_loaded_config;
     std::string                    m_load_error;
     bool                           m_erase_requested{false};
 };

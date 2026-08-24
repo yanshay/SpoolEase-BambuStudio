@@ -37,7 +37,7 @@ jobs:
           fail-on-cache-miss: true
 
       - name: Get the version and date on Ubuntu and macOS
-        if: inputs.os != 'windows-2022'
+        if: inputs.os != 'windows-latest'
         run: |
           ver_pure=$(grep 'set(SLIC3R_VERSION' version.inc | cut -d '"' -f2)
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
@@ -51,7 +51,7 @@ jobs:
         shell: bash
 
       - name: Get the version and date on Windows
-        if: inputs.os == 'windows-2022'
+        if: inputs.os == 'windows-latest'
         run: |
           $date = Get-Date -Format 'yyyyMMdd'
           $ref = "${{ github.ref }}"
@@ -114,18 +114,18 @@ jobs:
 
   # Windows
       - name: setup MSVC
-        if: inputs.os == 'windows-2022'
+        if: inputs.os == 'windows-latest'
         uses: microsoft/setup-msbuild@v2
 
       - name: Install nsis and pkgconfig
-        if: inputs.os == 'windows-2022'
+        if: inputs.os == 'windows-latest'
         run: |
           dir "C:/Program Files (x86)/Windows Kits/10/Include"
           choco install nsis
           choco install pkgconfiglite
 
       - name: Build slicer Win
-        if: inputs.os == 'windows-2022'
+        if: inputs.os == 'windows-latest'
         working-directory: ${{ github.workspace }}
         run: |
           mkdir build
@@ -140,7 +140,7 @@ jobs:
       #     cpack -G NSIS
 
       - name: Pack app
-        if: inputs.os == 'windows-2022'
+        if: inputs.os == 'windows-latest'
         working-directory: ${{ github.workspace }}
         shell: cmd
         run: '"C:/Program Files/7-Zip/7z.exe" a -tzip BambuStudio_Windows_${{ env.ver }}_portable.zip ${{ github.workspace }}/install-dir'
@@ -152,7 +152,7 @@ jobs:
       #   run: '"C:/Program Files/7-Zip/7z.exe" a -m0=lzma2 -mx9 Debug_PDB_${{ env.ver }}_for_developers_only.7z  *.pdb'
 
       - name: Upload artifacts Win zip
-        if: inputs.os == 'windows-2022'
+        if: inputs.os == 'windows-latest'
         uses: actions/upload-artifact@v6
         with:
           name: BambuStudio_Windows_${{ env.ver }}_portable

@@ -152,8 +152,8 @@ jobs:
             fi
             gh release upload "$RELEASE_TAG" release/* --repo "$REPO" --clobber
           else
-            tag_sha=$(gh api "repos/$REPO/git/ref/tags/$RELEASE_TAG" --jq .object.sha 2>/dev/null || true)
-            if [ -n "$tag_sha" ]; then
+            tag_sha=""
+            if tag_sha=$(gh api "repos/$REPO/git/ref/tags/$RELEASE_TAG" --jq .object.sha 2>/dev/null); then
               if [ "$tag_sha" != "$RELEASE_TARGET" ]; then
                 echo "Release tag $RELEASE_TAG already points to $tag_sha, but build run $RUN_ID produced $RELEASE_TARGET." >&2
                 echo "Refusing to publish mismatched release." >&2

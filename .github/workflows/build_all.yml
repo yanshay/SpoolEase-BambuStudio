@@ -2,8 +2,9 @@ name: Build all
 
 on:
   push:
-    branches:
-     - master
+    branches-ignore:
+      - trash
+
     paths:
      - 'deps/**'
      - 'src/**'

@@ -251,6 +251,34 @@ int NetworkAgent::initialize_network_module(bool using_backup, bool validate_cer
     library = plugin_folder.string() + "/" + std::string("lib") + std::string(BAMBU_NETWORK_LIBRARY) + ".so";
     #endif
     BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << boost::format(", line %1%, loading network module, using_backup %2%\n")%__LINE__ %using_backup;
+#if defined(__WXMAC__)
+    // Third-party macOS builds are signed by their own Developer ID, while
+    // the official Bambu networking plug-in remains signed by Bambu Lab.
+    // Accept the module if it matches the application's publisher OR if it
+    // is signed by Bambu Lab's known Apple Developer Team ID.
+    static constexpr const char* BAMBU_APPLE_TEAM_ID = "T3UBR9Y3B2";
+
+    module_cert_summary = SummarizeModule(library);
+    if (module_cert_summary) {
+        const bool same_publisher =
+            self_cert_summary &&
+            IsSamePublisher(*self_cert_summary, *module_cert_summary);
+
+        const bool official_bambu_module =
+            module_cert_summary->team_id == BAMBU_APPLE_TEAM_ID;
+
+        if (same_publisher || official_bambu_module) {
+            networking_module = dlopen(library.c_str(), RTLD_LAZY);
+        } else {
+            BOOST_LOG_TRIVIAL(info)
+                << "network module rejected: publisher does not match application "
+                << "and module is not signed by Bambu Lab:"
+                << module_cert_summary->as_print();
+        }
+    } else {
+        BOOST_LOG_TRIVIAL(info) << "module_cert is null";
+    }
+#else
     module_cert_summary = SummarizeModule(library);
     if (self_cert_summary) {
         module_cert_summary = SummarizeModule(library);
@@ -264,7 +292,8 @@ int NetworkAgent::initialize_network_module(bool using_backup, bool validate_cer
             BOOST_LOG_TRIVIAL(info) << "module_cert is null";
     }
     else
-        networking_module = dlopen( library.c_str(), RTLD_LAZY);
+        networking_module = dlopen(library.c_str(), RTLD_LAZY);
+#endif
     if (!networking_module) {
         char* dll_error = dlerror();
         std::string err       = dll_error ? std::string(dll_error) : std::string("(null)");

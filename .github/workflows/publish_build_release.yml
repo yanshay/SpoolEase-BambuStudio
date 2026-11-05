@@ -73,9 +73,10 @@ jobs:
 
           mkdir -p release unpack/mac dmg-root
 
-          windows_zip=$(find artifacts -type f -name 'BambuStudio_Windows_*_portable.zip' -print -quit)
+          windows_zip=$(find artifacts -type f -name 'BambuStudio_Windows_*_portable.zip' \
+            ! -name '*_arm64_portable.zip' ! -name '*_arm64ec_portable.zip' -print -quit)
           if [ -z "$windows_zip" ]; then
-            echo "Could not find Windows portable zip in downloaded artifacts." >&2
+            echo "Could not find Windows x64 portable zip in downloaded artifacts." >&2
             exit 1
           fi
           cp "$windows_zip" "release/SE_$(basename "$windows_zip")"

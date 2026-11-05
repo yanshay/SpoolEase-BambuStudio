@@ -1441,6 +1441,9 @@ void PlaterPresetComboBox::OnSelect(wxCommandEvent &evt)
             update_ams_color();
     }
 
+    if (m_type == Preset::TYPE_FILAMENT)
+        Slic3r::SpoolEase::record_filament_combo_selection(*this, selected_item);
+
     evt.Skip();
 }
 
@@ -1912,6 +1915,7 @@ void PlaterPresetComboBox::update()
 #endif
         SetToolTip(tooltip);
     }
+    Slic3r::SpoolEase::update_filament_combo_tooltip(*this);
 
 #ifdef __WXMSW__
     // Use this part of code just on Windows to avoid of some layout issues on Linux

@@ -1,4 +1,5 @@
 #include "SpoolEaseInventory.hpp"
+#include "SpoolEaseDeviceWeb.hpp"
 
 #include "SpoolEaseConfig.hpp"
 #include "SpoolEaseLog.hpp"
@@ -417,6 +418,7 @@ void request_ui_refresh()
         if (wxWindow* top = wxTheApp->GetTopWindow())
             top->Refresh(true);
         refresh_filament_combo_tooltips();
+        refresh_ams_control_web_hosts();
     });
 }
 

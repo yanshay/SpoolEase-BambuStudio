@@ -3,6 +3,7 @@
 #include "ViewModelActions.hpp"
 #include "ViewModelDataBuilder.hpp"
 #include "ViewModelDisplayBuilder.hpp"
+#include "spoolease/SpoolEaseDeviceWeb.hpp"
 
 #include "slic3r/GUI/DeviceWeb/DeviceWebBridge.hpp"
 #include "slic3r/GUI/DeviceWeb/DeviceWebHost.hpp"
@@ -304,7 +305,7 @@ nlohmann::json DevicePageAmsControlWebVM::BuildState() const
 
     AmsControlWebDisplay::Build(machine_obj, state);
 
-    return state;
+    return Slic3r::SpoolEase::enrich_ams_control_state(state, machine_obj);
 }
 
 void DevicePageAmsControlWebVM::ResolveSelection(SchemaFormat::State& state) const

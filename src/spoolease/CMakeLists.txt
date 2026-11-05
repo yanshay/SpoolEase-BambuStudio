@@ -51,6 +51,8 @@ set(SLIC3R_GUI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseCustomFilaments.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseDropdownTooltip.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseDropdownTooltip.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseDeviceWeb.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseDeviceWeb.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseFilamentTooltips.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseFilamentTooltips.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SpoolEaseSlicerWebSocket.cpp

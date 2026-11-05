@@ -33,6 +33,7 @@ import type {
   UnitHub,
   UnitView,
 } from './types';
+import { normalizeSpoolEaseSlot } from '../../../spoolease/DeviceSlot';
 
 const DEFAULT_COLOR = '#D9D9D9';
 
@@ -212,6 +213,7 @@ function normalizeSlotView(raw: unknown): SlotView {
   const item = (raw ?? {}) as Partial<SlotView>;
   const color = asString(item.color, DEFAULT_COLOR) || DEFAULT_COLOR;
   return {
+    spoolease: normalizeSpoolEaseSlot(item.spoolease),
     ams_id: asString(item.ams_id),
     slot_id: asString(item.slot_id),
     label: asString(item.label),

@@ -72,7 +72,10 @@ export interface SlotRemainLine {
   remain_percent: number;
 }
 
+import type { SpoolEaseSlotInfo } from '../../../spoolease/DeviceSlot';
+
 export interface SlotView {
+  spoolease?: SpoolEaseSlotInfo;
   ams_id: string;
   slot_id: string;
   label: string;

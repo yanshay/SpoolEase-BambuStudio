@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { SpoolEaseDeviceSlot, spoolEaseSlotTooltip } from '../../../../spoolease/DeviceSlot';
 import { COLORS, SLOT_LIB, SLOT_LIB_LITE, SLOT_REMAIN_LINE, TRAY_ICON, px } from '../dip';
 import { LITE_COLOR_INSET, LITE_EXT_COLOR_INSET } from '../geometry';
 import type { SlotView } from '../types';
@@ -305,6 +306,7 @@ export function SlotCard({
       role="button"
       tabIndex={0}
       data-testid={`ams-slot-${slot.ams_id}-${slot.slot_id}`}
+      title={slot.spoolease ? spoolEaseSlotTooltip(tip, slot.spoolease) : undefined}
       aria-label={tip ? `${slot.label} ${tip}` : slot.label}
       onClick={() => onSelect(slot)}
       onKeyDown={(e) => {
@@ -447,6 +449,7 @@ export function SlotCard({
         </button>
       ) : null}
     </div>
+      <SpoolEaseDeviceSlot info={slot.spoolease} inset={lite ? liteInset : undefined} />
     </div>
   );
 }

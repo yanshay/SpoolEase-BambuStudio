@@ -1,0 +1,41 @@
+.spoolease-device-slot {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  text-align: center;
+}
+
+.spoolease-device-slot-id {
+  position: absolute;
+  box-sizing: border-box;
+  top: -11px;
+  left: 5px;
+  right: 5px;
+  height: 16px;
+  border: 1px solid #00ae42;
+  border-radius: 8px;
+  background: #00ae42;
+  color: #000;
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 14px;
+  overflow: hidden;
+}
+
+.spoolease-device-slot-weight {
+  position: absolute;
+  box-sizing: border-box;
+  bottom: -8px;
+  left: 4px;
+  right: 4px;
+  height: 17px;
+  border: 1px solid #828280;
+  border-radius: 3px;
+  background: #fff;
+  color: #000;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 14px;
+}

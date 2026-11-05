@@ -1,6 +1,7 @@
 #include "wgtAmsControlWebPanel.h"
 
 #include "slic3r/GUI/DeviceWeb/DeviceWebHost.hpp"
+#include "spoolease/SpoolEaseDeviceWeb.hpp"
 
 #include <wx/sizer.h>
 
@@ -26,6 +27,7 @@ wgtAmsControlWebPanel::wgtAmsControlWebPanel(wxWindow* parent)
                                      DeviceWebHostMode::DevicePageAmsControlWeb,
                                      kRoute,
                                      /*allow_lazy=*/true);
+    Slic3r::SpoolEase::register_ams_control_web_host(m_device_web);
     m_device_web->SetMinSize(wxSize(FromDIP(kMinWidthDip), FromDIP(kMinHeightDip)));
     m_device_web->SetContentSizeChangedHandler([this](const wxSize& content_size) {
         SetMinSize(content_size);

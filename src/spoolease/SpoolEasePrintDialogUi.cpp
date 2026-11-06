@@ -59,7 +59,7 @@ int top_extra(const wxWindow& item)
 
 int bottom_extra(const wxWindow& item)
 {
-    return item.FromDIP(44);
+    return item.FromDIP(66);
 }
 
 wxSize total_size_from_bambu(const wxWindow& item, const wxSize& bambu_size)
@@ -151,6 +151,7 @@ std::optional<SlotInventory> inventory_for_slot_label(const ItemState& state, co
 
 enum class CapacityStatus
 {
+    Unknown,
     Normal,
     NearLimit,
     Insufficient
@@ -159,7 +160,7 @@ enum class CapacityStatus
 CapacityStatus capacity_status(const ItemState& state, const SlotInventory& inventory)
 {
     if (!state.required_g.has_value() || !inventory.weight_net.has_value())
-        return CapacityStatus::Normal;
+        return CapacityStatus::Unknown;
 
     if (state.required_g.value() > inventory.weight_net.value())
         return CapacityStatus::Insufficient;
@@ -190,17 +191,19 @@ wxColour capacity_text_colour(CapacityStatus status, const wxColour& normal_colo
 
 wxColour capacity_border_colour(CapacityStatus status, const wxColour& normal_colour)
 {
-    return status == CapacityStatus::Normal ? normal_colour : capacity_background_colour(status);
+    return status == CapacityStatus::Insufficient || status == CapacityStatus::NearLimit
+        ? capacity_background_colour(status) : normal_colour;
 }
 
 int capacity_border_width(const wxWindow& item, CapacityStatus status, int normal_width)
 {
-    return status == CapacityStatus::Normal ? normal_width : std::max(normal_width, item.FromDIP(2));
+    return status == CapacityStatus::Insufficient || status == CapacityStatus::NearLimit
+        ? std::max(normal_width, item.FromDIP(2)) : normal_width;
 }
 
 void draw_capacity_background(wxDC& dc, const wxWindow& item, const wxSize& bambu_size, CapacityStatus status, int corner_radius)
 {
-    if (status == CapacityStatus::Normal)
+    if (status != CapacityStatus::Insufficient && status != CapacityStatus::NearLimit)
         return;
 
     const wxSize size = item.GetClientSize();
@@ -235,6 +238,36 @@ void draw_outer_frame(wxDC& dc, const wxWindow& item, const wxColour& border_col
     dc.DrawRoundedRectangle(0, 0, size.x, size.y, corner_radius);
 }
 
+void draw_capacity_badge(wxDC& dc, const wxWindow& item, int y, CapacityStatus status)
+{
+    const int diameter = item.FromDIP(21);
+    const int x = (item.GetClientSize().x - diameter) / 2;
+    const int cx = x + diameter / 2 + 1;
+    const int cy = y + diameter / 2 + 1;
+    const wxColour dark(35, 35, 35);
+    const wxColour fill = status == CapacityStatus::Normal ? wxColour(0, 174, 66)
+        : status == CapacityStatus::NearLimit ? wxColour(255, 225, 0)
+        : status == CapacityStatus::Insufficient ? wxColour(230, 0, 0)
+        : wxColour(217, 217, 217);
+    const wxColour symbol = status == CapacityStatus::Insufficient ? *wxWHITE : dark;
+
+    dc.SetPen(wxPen(status == CapacityStatus::Insufficient ? *wxWHITE : dark, item.FromDIP(1)));
+    dc.SetBrush(wxBrush(fill));
+    dc.DrawEllipse(x, y, diameter, diameter);
+    dc.SetPen(wxPen(symbol, std::max(1, item.FromDIP(2))));
+
+    if (status == CapacityStatus::Normal) {
+        dc.DrawLine(cx - item.FromDIP(5), cy, cx - item.FromDIP(1), cy + item.FromDIP(4));
+        dc.DrawLine(cx - item.FromDIP(1), cy + item.FromDIP(4), cx + item.FromDIP(5), cy - item.FromDIP(4));
+    } else {
+        dc.SetFont(base_font(item, 12, wxFONTWEIGHT_BOLD));
+        dc.SetTextForeground(symbol);
+        const wxString text = status == CapacityStatus::NearLimit ? "!"
+            : status == CapacityStatus::Insufficient ? "X" : "?";
+        draw_centered_text(dc, text, x+1, y+1, diameter, diameter);
+    }
+}
+
 CapacityStatus draw_extra_content(wxDC& dc, const wxWindow& item, const wxSize& bambu_size, const wxString& slot_label, const wxFont& font, wxColour text_colour, int corner_radius)
 {
     const ItemState* state = state_for(item);
@@ -249,9 +282,12 @@ CapacityStatus draw_extra_content(wxDC& dc, const wxWindow& item, const wxSize& 
     dc.SetTextForeground(text_colour);
     draw_centered_text(dc, wxString::FromUTF8(format_weight(state->required_g)), 0, item.FromDIP(1), size.x, top_h - item.FromDIP(2));
 
+    const int badge_y = bottom_y + item.FromDIP(42);
     const std::optional<SlotInventory> inventory = inventory_for_slot_label(*state, slot_label);
-    if (!inventory.has_value())
-        return CapacityStatus::Normal;
+    if (!inventory.has_value()) {
+        draw_capacity_badge(dc, item, badge_y, CapacityStatus::Unknown);
+        return CapacityStatus::Unknown;
+    }
 
     const CapacityStatus status = capacity_status(*state, *inventory);
     draw_capacity_background(dc, item, bambu_size, status, corner_radius);
@@ -278,6 +314,7 @@ CapacityStatus draw_extra_content(wxDC& dc, const wxWindow& item, const wxSize& 
     dc.SetFont(font.IsOk() ? font : base_font(item, 12, wxFONTWEIGHT_NORMAL));
     dc.SetTextForeground(capacity_text_colour(status, text_colour));
     draw_centered_text(dc, visible_text(display_weight(inventory->weight_net)), 0, slot_y, size.x, item.FromDIP(20));
+    draw_capacity_badge(dc, item, badge_y, status);
     return status;
 }
 

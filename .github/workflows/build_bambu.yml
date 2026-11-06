@@ -92,12 +92,13 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           brew install automake texinfo
-          brew unlink cmake || true
-          brew tap-new $USER/old-cmake
-          brew extract --version=3.31.0 cmake $USER/old-cmake
-          brew install $USER/old-cmake/cmake@3.31.0
-          brew link --overwrite cmake@3.31.0
-          brew pin cmake@3.31.0
+          cmake_archive=cmake-3.31.0-macos-universal.tar.gz
+          cmake_url=https://github.com/Kitware/CMake/releases/download/v3.31.0
+          curl -fsSL "$cmake_url/$cmake_archive" -o "$RUNNER_TEMP/$cmake_archive"
+          curl -fsSL "$cmake_url/cmake-3.31.0-SHA-256.txt" -o "$RUNNER_TEMP/cmake-checksums.txt"
+          (cd "$RUNNER_TEMP" && grep "  $cmake_archive\$" cmake-checksums.txt | shasum -a 256 -c -)
+          tar -xzf "$RUNNER_TEMP/$cmake_archive" -C "$RUNNER_TEMP"
+          export PATH="$RUNNER_TEMP/cmake-3.31.0-macos-universal/CMake.app/Contents/bin:$PATH"
           ./BuildMac.sh -s -x -a universal -t 10.15 -1
 
       - name: pack mac app

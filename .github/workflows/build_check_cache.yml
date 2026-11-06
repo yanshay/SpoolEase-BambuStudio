@@ -35,8 +35,10 @@ jobs:
           # Windows runs two variants (arm64/arm64ec) on the same runner label,
           # so the arch must be part of the key or their caches collide.
           arch-suffix: ${{ (startsWith(inputs.os, 'windows') && inputs.arch != '') && format('-{0}', inputs.arch) || '' }}
+          # Rebuild macOS 15 dependencies after changing the CMake installation.
+          cache-version: ${{ inputs.os == 'macos-15' && '-cmake-3.31.0-v2' || '' }}
         run: |
-          echo cache-key=${{ inputs.os }}${{ env.arch-suffix }}-cache-bambustudio_deps-build-${{ hashFiles('deps/**') }} >> ${{ env.output-cmd }}
+          echo cache-key=${{ inputs.os }}${{ env.arch-suffix }}${{ env.cache-version }}-cache-bambustudio_deps-build-${{ hashFiles('deps/**') }} >> ${{ env.output-cmd }}
           echo cache-path=${{ github.workspace }}/deps/build${{ env.dep-folder-name }} >> ${{ env.output-cmd }}
             
       - name: load cache

@@ -412,7 +412,7 @@ private:
                 wait_or_wake(reconnect_interval);
                 continue;
             }
-            if (!config->proxy_printer_messages_configured) {
+            if (!config->proxy_printer_messages_enabled()) {
                 clear_live_status(ws_status_key);
                 clear_live_status(proxy_status_key);
                 wait_or_wake(reconnect_interval);

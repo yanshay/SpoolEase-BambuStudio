@@ -206,16 +206,18 @@ std::string tls_verify_reason(long verify_result)
     return reason ? std::string(reason) : std::string();
 }
 
-std::optional<std::string> fetch_slots_json(const ConsoleConfig& config)
+std::optional<std::string> fetch_slots_json(const ConsoleConfig& config, CURL*& curl)
 {
     std::call_once(s_curl_init_once, []() { curl_global_init(CURL_GLOBAL_DEFAULT); });
 
-    CURL* curl = curl_easy_init();
+    if (!curl)
+        curl = curl_easy_init();
     if (!curl) {
         SPOOLEASE_LOG(error) << "SpoolEase: API curl init failed";
         set_live_status_error("inventory_api", "API error: failed to initialize HTTP client.");
         return std::nullopt;
     }
+    curl_easy_reset(curl);
 
     std::string body;
     std::array<char, CURL_ERROR_SIZE> error{};
@@ -267,7 +269,6 @@ std::optional<std::string> fetch_slots_json(const ConsoleConfig& config)
     curl_easy_getinfo(curl, CURLINFO_SSL_VERIFYRESULT, &verify_result);
 
     curl_slist_free_all(headers);
-    curl_easy_cleanup(curl);
 
     if (result != CURLE_OK) {
         const std::string error_message = clean_curl_error(error, result);
@@ -462,12 +463,15 @@ private:
     void run()
     {
         SPOOLEASE_LOG(info) << "SpoolEase: API loop started";
+        CURL* curl = nullptr;
         while (!m_stop) {
-            poll_once();
+            poll_once(curl);
             const auto until = std::chrono::steady_clock::now() + poll_interval;
             while (!m_stop && !m_wake.exchange(false) && std::chrono::steady_clock::now() < until)
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
+        if (curl)
+            curl_easy_cleanup(curl);
         SPOOLEASE_LOG(info) << "SpoolEase: API loop stopped";
     }
 
@@ -505,7 +509,7 @@ private:
             request_ui_refresh();
     }
 
-    void poll_once()
+    void poll_once(CURL*& curl)
     {
         const std::optional<ConsoleConfig> config = console_config(false, "api_loop");
         if (!config.has_value()) {
@@ -516,7 +520,7 @@ private:
 
         note_config_key(config_key(*config));
 
-        const std::optional<std::string> body = fetch_slots_json(*config);
+        const std::optional<std::string> body = fetch_slots_json(*config, curl);
         if (!body.has_value())
             return;
 
